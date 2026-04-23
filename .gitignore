@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# Test reports (generated at runtime)
+**/TestReport_*/
+
+# VS files
+.vs/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+packages/
+
+# OS
+Thumbs.db
+.DS_Store
