@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HostSimTester — 修改紀錄</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Microsoft JhengHei UI", "Segoe UI", sans-serif;
+      background: #0f1923;
+      color: #cdd6e0;
+      padding: 32px 24px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      color: #7ec8e3;
+      border-bottom: 2px solid #1e3a50;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      letter-spacing: .04em;
+    }
+
+    .meta {
+      font-size: .82rem;
+      color: #5a7a90;
+      margin-bottom: 32px;
+    }
+
+    .entry {
+      background: #14232f;
+      border: 1px solid #1e3a50;
+      border-radius: 8px;
+      margin-bottom: 28px;
+      overflow: hidden;
+    }
+
+    .entry-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #1a3448;
+      padding: 12px 18px;
+    }
+
+    .badge {
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .badge-fix    { background: #c0392b; color: #fff; }
+    .badge-update { background: #1a6fa8; color: #fff; }
+
+    .entry-header h2 {
+      font-size: 1rem;
+      color: #aedcf5;
+      font-weight: 600;
+    }
+
+    .entry-body {
+      padding: 16px 18px;
+      font-size: .9rem;
+      line-height: 1.7;
+    }
+
+    .entry-body p { margin-bottom: 8px; }
+
+    .entry-body .label {
+      color: #7ec8e3;
+      font-weight: 600;
+    }
+
+    .files {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .file-tag {
+      font-size: .78rem;
+      background: #0d1e2b;
+      border: 1px solid #1e3a50;
+      color: #7ec8e3;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-family: Consolas, monospace;
+    }
+
+    code {
+      font-family: Consolas, monospace;
+      font-size: .85em;
+      background: #0d1e2b;
+      border: 1px solid #1e3a50;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: #f0c674;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: .88rem;
+    }
+
+    th {
+      text-align: left;
+      color: #7ec8e3;
+      border-bottom: 1px solid #1e3a50;
+      padding: 6px 10px;
+    }
+
+    td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #1a2d3d;
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    td.before { color: #e07070; }
+    td.after  { color: #7ee0a0; }
+  </style>
+</head>
+<body>
+
+<h1>HostSimTester — 修改紀錄</h1>
+<p class="meta">專案：HostSimTester.App &nbsp;|&nbsp; 修改日期：2026-04-23 &nbsp;|&nbsp; 修改人：謝翔宇</p>
+
+<!-- ── Issue 1 ───────────────────────────────────────────────── -->
+<div class="entry">
+  <div class="entry-header">
+    <span class="badge badge-fix">Bug Fix</span>
+    <h2>Issue 1 — PPID 列表顯示帶有多餘的 <code>/</code> 前綴</h2>
+  </div>
+  <div class="entry-body">
+    <p><span class="label">問題描述：</span>
+      設備端回傳的 S7F20 PPID 字串帶有前置斜線（如 <code>/Default</code>、<code>/Trim_1</code>），
+      導致 UI 列表、ComboBox 顯示不直觀，且手動輸入時需要加 <code>/</code> 才能比對。
+    </p>
+    <p><span class="label">根本原因：</span>
+      <code>ParsePpidList()</code> 直接取 ASCII 字串，未做任何清理。
+    </p>
+    <p><span class="label">修正方式：</span>
+      在解析時加入 <code>.TrimStart('/')</code>，去除所有 PPID 的前置斜線。
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>修改前</th><th>修改後</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="before"><code>var s = sub.GetString();</code></td>
+          <td class="after"><code>var s = sub.GetString().TrimStart('/');</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="files">
+      <span class="file-tag">HostSimTester.App/Pages/L2RecipePage.cs</span>
+      <span class="file-tag">ParsePpidList()</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Issue 2 ───────────────────────────────────────────────── -->
+<div class="entry">
+  <div class="entry-header">
+    <span class="badge badge-fix">Bug Fix</span>
+    <h2>Issue 2 — Formatted Recipe Body Download payload 結構錯誤</h2>
+  </div>
+  <div class="entry-body">
+    <p><span class="label">問題描述：</span>
+      按鈕 <code>(2.2) Formatted Recipe Body Download</code> 與 <code>(4.2) Formatted Recipe Body Download</code>
+      呼叫了 <code>S7F23UnformattedProcessProgramSend()</code>（Unformatted 格式），
+      送出的 payload 為 <code>L[ A(PPID), B(...) ]</code>，與 SECS-II S7F23 Formatted 規格不符，導致設備端回覆 ACKC7 = NAK。
+    </p>
+    <p><span class="label">根本原因：</span>
+      沒有對應的 Formatted S7F23 方法，開發時誤用 Unformatted 版本。
+    </p>
+    <p><span class="label">修正方式：</span>
+      在 <code>SecsMessageFactory</code> 新增 <code>S7F23FormattedProcessProgramSend()</code>，
+      payload 結構參照 TOOLID.xml 定義：
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>項目</th><th>內容</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>新方法名稱</td>
+          <td><code>S7F23FormattedProcessProgramSend(string ppid)</code></td>
+        </tr>
+        <tr>
+          <td>Payload 結構</td>
+          <td>
+            <code>L[ A(PPID), A(MDLN), A(SOFTREV), L[ L[ U2(CCODE), L[ A(PPARM) ] ] ] ]</code>
+          </td>
+        </tr>
+        <tr>
+          <td>修改的按鈕</td>
+          <td>
+            <code>(2.2) Formatted Recipe Body Download</code>（Main）<br>
+            <code>(4.2) Formatted Recipe Body Download</code>（Sub）
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="files">
+      <span class="file-tag">HostSimTester.App/Secs/SecsMessageFactory.cs</span>
+      <span class="file-tag">HostSimTester.App/Pages/L2RecipePage.cs</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Issue 3 ───────────────────────────────────────────────── -->
+<div class="entry">
+  <div class="entry-header">
+    <span class="badge badge-fix">Bug Fix</span>
+    <h2>Issue 3 — Delete Recipe 後按 6.2 / 7.2 PPID List Inquiry 列表不更新</h2>
+  </div>
+  <div class="entry-body">
+    <p><span class="label">問題描述：</span>
+      Delete Recipe 成功後，按下 <code>(6.2) PPID List Inquiry</code> 或 <code>(7.2) PPID List Inquiry</code>
+      並不會更新左側的 PPID 結果文字框及所有 ComboBox，刪除後的 PPID 仍顯示在下拉選單中。
+    </p>
+    <p><span class="label">根本原因：</span>
+      兩個按鈕原本只呼叫 <code>SendAsync("...", 7, 19)</code>，僅送出訊息並記錄 log，
+      未解析 S7F20 回覆也未更新 UI 控制項。
+    </p>
+    <p><span class="label">修正方式：</span>
+      將 <code>(6.2)</code> 與 <code>(7.2)</code> 的動作改為直接呼叫 <code>QueryPpidListAsync()</code>，
+      與 <code>(1) PPID List Inquiry</code> 相同的完整流程（送出 → 解析 → 更新 TextBox + ComboBox）。
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>按鈕</th><th>修改前</th><th>修改後</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>(6.2) PPID List Inquiry</code></td>
+          <td class="before"><code>() =&gt; SendAsync("L2Recipe_S7F19_Main_Check", 7, 19)</code></td>
+          <td class="after"><code>QueryPpidListAsync</code></td>
+        </tr>
+        <tr>
+          <td><code>(7.2) PPID List Inquiry</code></td>
+          <td class="before"><code>() =&gt; SendAsync("L2Recipe_S7F19_Sub_Check", 7, 19)</code></td>
+          <td class="after"><code>QueryPpidListAsync</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="files">
+      <span class="file-tag">HostSimTester.App/Pages/L2RecipePage.cs</span>
+      <span class="file-tag">QueryPpidListAsync()</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

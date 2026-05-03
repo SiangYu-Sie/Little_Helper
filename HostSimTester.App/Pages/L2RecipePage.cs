@@ -80,7 +80,7 @@ public sealed class L2RecipePage : BaseTestPage
                 Secs.SecsMessageFactory.S7F25FormattedProcessProgramRequest(GetMainPpid())), 280);
         AddActionTo(s2Body, "(2.2) Formatted Recipe Body Download",
             () => SendAsync("L2Recipe_S7F23_Main_FormattedDownload", 7, 23,
-                Secs.SecsMessageFactory.S7F23UnformattedProcessProgramSend(GetMainPpid())), 280);
+                Secs.SecsMessageFactory.S7F23FormattedProcessProgramSend(GetMainPpid())), 280);
         AddActionTo(s2Body, "(3.1) UnFormatted Recipe Body Upload",
             () => SendAsync("L2Recipe_S7F5_Main_UnformattedUpload", 7, 5,
                 Secs.SecsMessageFactory.S7F5UnformattedProcessProgramRequest(GetMainPpid())), 280);
@@ -98,7 +98,7 @@ public sealed class L2RecipePage : BaseTestPage
                 Secs.SecsMessageFactory.S7F25FormattedProcessProgramRequest(GetSubPpid())), 280);
         AddActionTo(s2Body, "(4.2) Formatted Recipe Body Download",
             () => SendAsync("L2Recipe_S7F23_Sub_FormattedDownload", 7, 23,
-                Secs.SecsMessageFactory.S7F23UnformattedProcessProgramSend(GetSubPpid())), 280);
+                Secs.SecsMessageFactory.S7F23FormattedProcessProgramSend(GetSubPpid())), 280);
         AddActionTo(s2Body, "(5.1) UnFormatted Recipe Body Upload",
             () => SendAsync("L2Recipe_S7F5_Sub_UnformattedUpload", 7, 5,
                 Secs.SecsMessageFactory.S7F5UnformattedProcessProgramRequest(GetSubPpid())), 280);
@@ -121,7 +121,7 @@ public sealed class L2RecipePage : BaseTestPage
             () => SendAsync("L2Recipe_S7F17_Main_Delete", 7, 17,
                 Secs.SecsMessageFactory.S7F17DeleteProcessProgramSend(GetMainPpidDel())), 260);
         AddActionTo(s3Body, "(6.2) PPID List Inquiry",
-            () => SendAsync("L2Recipe_S7F19_Main_Check", 7, 19), 260);
+            QueryPpidListAsync, 260);
 
         var subDelBar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(6, 10, 6, 0) };
         subDelBar.Controls.Add(new Label { Text = "Sub Recipe PPID :", Width = 124, ForeColor = Theme.ThemeHelper.TextMid, TextAlign = ContentAlignment.MiddleLeft });
@@ -132,7 +132,7 @@ public sealed class L2RecipePage : BaseTestPage
             () => SendAsync("L2Recipe_S7F17_Sub_Delete", 7, 17,
                 Secs.SecsMessageFactory.S7F17DeleteProcessProgramSend(GetSubPpidDel())), 260);
         AddActionTo(s3Body, "(7.2) PPID List Inquiry",
-            () => SendAsync("L2Recipe_S7F19_Sub_Check", 7, 19), 260);
+            QueryPpidListAsync, 260);
 
         grid.Controls.Add(s3, 2, 0);
     }
@@ -174,7 +174,7 @@ public sealed class L2RecipePage : BaseTestPage
             var sub = root[i];
             if (sub.Format == SecsFormat.ASCII)
             {
-                var s = sub.GetString();
+                var s = sub.GetString().TrimStart('/');
                 if (s.Length > 0) result.Add(s);
             }
         }

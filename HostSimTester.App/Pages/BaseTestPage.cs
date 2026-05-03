@@ -10,6 +10,7 @@ public abstract class BaseTestPage : UserControl
     private readonly Label _statusLabel;
     private readonly Label _statsLabel;
     private readonly RichTextBox _resultBox;
+    private readonly SplitContainer _pageSplit;
     private readonly List<Panel> _actionLamps = new();
     private readonly Dictionary<string, Panel> _actionLampsByText = new(StringComparer.OrdinalIgnoreCase);
     private int _passCount;
@@ -114,10 +115,31 @@ public abstract class BaseTestPage : UserControl
             Font = new Font("Consolas", 9F)
         };
 
-        Controls.Add(_resultBox);
-        Controls.Add(statusPanel);
-        Controls.Add(_actionPanel);
-        Controls.Add(title);
+        _pageSplit = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            FixedPanel = FixedPanel.Panel2,
+            BackColor = Theme.ThemeHelper.IceSurface
+        };
+
+        var leftPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Theme.ThemeHelper.LogBg
+        };
+
+        leftPanel.Controls.Add(statusPanel);
+        leftPanel.Controls.Add(_actionPanel);
+        leftPanel.Controls.Add(title);
+
+        _pageSplit.Panel1.Controls.Add(leftPanel);
+        _pageSplit.Panel2.Controls.Add(_resultBox);
+
+        Controls.Add(_pageSplit);
+        _pageSplit.SizeChanged += (_, _) => UpdatePageSplitDistance();
+        Load += (_, _) => UpdatePageSplitDistance();
+        UpdatePageSplitDistance();
         UpdateStatsText();
 
         Connection.PrimaryMessageReceived += msg =>
@@ -138,7 +160,7 @@ public abstract class BaseTestPage : UserControl
         AddActionTo(_actionPanel, text, action);
     }
 
-    protected void AddActionTo(Control host, string text, Func<Task> action, int buttonWidth = 196)
+    protected void AddActionTo(Control host, string text, Func<Task> action, int buttonWidth = 196, bool showLamp = true)
     {
         var itemPanel = new FlowLayoutPanel
         {
@@ -157,7 +179,8 @@ public abstract class BaseTestPage : UserControl
             Height = 16,
             Margin = new Padding(3, 8, 8, 0),
             BorderStyle = BorderStyle.FixedSingle,
-            BackColor = Color.FromArgb(160, 170, 180)
+            BackColor = Color.FromArgb(160, 170, 180),
+            Visible = showLamp
         };
 
         _actionLamps.Add(actionLamp);
@@ -227,6 +250,11 @@ public abstract class BaseTestPage : UserControl
         }
     }
 
+    protected bool TryGetActionLamp(string actionText, out Panel lamp)
+    {
+        return _actionLampsByText.TryGetValue(actionText, out lamp!);
+    }
+
     protected async Task SendAsync(string operationName, byte stream, byte function, Item? payload = null, bool expectReply = true)
     {
         var reply = await Connection.SendAsync(operationName, stream, function, payload, expectReply).ConfigureAwait(true);
@@ -236,6 +264,7 @@ public abstract class BaseTestPage : UserControl
         foreach (var line in interpreted)
         {
             AppendResult($"< {line}");
+            Logger.Info("Reply detail: {detail}", line);
         }
 
         if (reply is not null && interpreted.Any(x => x.Contains("NAK/ERROR", StringComparison.OrdinalIgnoreCase)))
@@ -252,6 +281,7 @@ public abstract class BaseTestPage : UserControl
         foreach (var line in interpreted)
         {
             AppendResult($"< {line}");
+            Logger.Info("Primary detail: {detail}", line);
         }
     }
 
@@ -285,6 +315,31 @@ public abstract class BaseTestPage : UserControl
         }
         UpdateStatsText();
         AppendResult("[INFO] Test stats reset.");
+    }
+
+    private void UpdatePageSplitDistance()
+    {
+        if (_pageSplit.IsDisposed)
+        {
+            return;
+        }
+
+        var width = _pageSplit.ClientSize.Width;
+        var minPanel1 = _pageSplit.Panel1MinSize;
+        const int desiredPanel2MinSize = 320;
+
+        if (width <= minPanel1)
+        {
+            return;
+        }
+
+        var effectivePanel2MinSize = Math.Min(desiredPanel2MinSize, width - minPanel1);
+        var maxDistance = width - effectivePanel2MinSize;
+        var targetDistance = Math.Clamp(980, minPanel1, maxDistance);
+        if (_pageSplit.SplitterDistance != targetDistance)
+        {
+            _pageSplit.SplitterDistance = targetDistance;
+        }
     }
 
     protected static GroupBox CreateSection(string title)
@@ -345,7 +400,7 @@ public abstract class BaseTestPage : UserControl
     {
         var tabControl = new TabControl
         {
-            Width = 960,
+            Width = 1150,
             Height = 600,
             Margin = new Padding(0),
             Padding = new Point(12, 6)

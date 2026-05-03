@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>Form & Button 比對報告 — HostSimTester vs ToolSoftwareTester</title>
+  <style>
+    :root {
+      --navy: #1a2b4a;
+      --cobalt: #1e5fa8;
+      --ice: #e8eef6;
+      --ok: #d4edda;
+      --ok-text: #155724;
+      --ok-border: #28a745;
+      --warn: #fff3cd;
+      --warn-text: #856404;
+      --warn-border: #ffc107;
+      --miss: #f8d7da;
+      --miss-text: #721c24;
+      --miss-border: #dc3545;
+      --extra: #d1ecf1;
+      --extra-text: #0c5460;
+      --extra-border: #17a2b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Microsoft JhengHei UI", "Segoe UI", sans-serif;
+      font-size: 14px;
+      background: #f0f4f8;
+      color: #222;
+    }
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 24px 36px;
+    }
+    header h1 { font-size: 22px; margin-bottom: 6px; }
+    header p  { font-size: 13px; opacity: .75; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 24px 36px 60px; }
+
+    /* Summary bar */
+    .summary {
+      display: flex; gap: 14px; flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .chip {
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid transparent;
+    }
+    .chip-ok    { background: var(--ok);    color: var(--ok-text);    border-color: var(--ok-border); }
+    .chip-warn  { background: var(--warn);  color: var(--warn-text);  border-color: var(--warn-border); }
+    .chip-miss  { background: var(--miss);  color: var(--miss-text);  border-color: var(--miss-border); }
+    .chip-extra { background: var(--extra); color: var(--extra-text); border-color: var(--extra-border); }
+    .chip .count { font-size: 22px; line-height: 1; }
+
+    /* Legend */
+    .legend {
+      background: #fff;
+      border: 1px solid #dde4ee;
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin-bottom: 28px;
+      display: flex; gap: 24px; flex-wrap: wrap;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-ok    { background: var(--ok-border); }
+    .dot-warn  { background: var(--warn-border); }
+    .dot-miss  { background: var(--miss-border); }
+    .dot-extra { background: var(--extra-border); }
+
+    /* Form card */
+    .card {
+      background: #fff;
+      border: 1px solid #dde4ee;
+      border-radius: 10px;
+      margin-bottom: 28px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: var(--cobalt);
+      color: #fff;
+      padding: 12px 20px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .card-header h2 { font-size: 15px; }
+    .card-header .badge {
+      margin-left: auto;
+      font-size: 12px;
+      background: rgba(255,255,255,.2);
+      padding: 2px 10px;
+      border-radius: 12px;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: var(--ice); }
+    thead th {
+      padding: 9px 14px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--navy);
+      border-bottom: 2px solid #c8d4e8;
+    }
+    tbody tr { border-bottom: 1px solid #eef0f4; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 9px 14px; font-size: 13px; vertical-align: top; }
+    .col-ref   { width: 28%; }
+    .col-ours  { width: 30%; }
+    .col-type  { width: 10%; }
+    .col-note  { width: 22%; }
+    .col-status{ width: 10%; text-align: center; }
+
+    .row-ok    { background: var(--ok); }
+    .row-warn  { background: var(--warn); }
+    .row-miss  { background: var(--miss); }
+    .row-extra { background: var(--extra); }
+
+    .tag {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 2px;
+    }
+    .tag-btn    { background: #cce0ff; color: #003580; }
+    .tag-event  { background: #e0e0e0; color: #444; }
+    .tag-extra  { background: var(--extra); color: var(--extra-text); border: 1px solid var(--extra-border); }
+
+    code { font-family: Consolas, monospace; font-size: 12px; background: #f3f5f8; padding: 1px 5px; border-radius: 3px; }
+
+    .status-icon { font-size: 18px; }
+
+    .section-note { padding: 8px 14px; font-size: 12px; color: #666; background: #f9fafc; border-top: 1px dashed #dde4ee; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Form &amp; Button 比對報告</h1>
+  <p>參考程式：ToolSoftwareTester 1.0.0.0 &nbsp;|&nbsp; 目標：HostSimTester (NET8) &nbsp;|&nbsp; 比對日期：2026-04-24 &nbsp;|&nbsp; 資料來源：TestLog ButtonClick 記錄 + 原始碼</p>
+</header>
+
+<div class="container">
+
+  <!-- Summary -->
+  <div class="summary">
+    <div class="chip chip-ok">   <span class="count">✅</span> 完整對齊 &nbsp;<strong id="cnt-ok"></strong> 項</div>
+    <div class="chip chip-warn"> <span class="count">⚠️</span> 有差異 &nbsp;<strong id="cnt-warn"></strong> 項</div>
+    <div class="chip chip-miss"> <span class="count">❌</span> 尚未實作 &nbsp;<strong id="cnt-miss"></strong> 項</div>
+    <div class="chip chip-extra"><span class="count">➕</span> 我們額外實作 &nbsp;<strong id="cnt-extra"></strong> 項</div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span style="font-weight:700; color:var(--navy)">圖例：</span>
+    <div class="legend-item"><span class="dot dot-ok"></span> 完整對齊：功能與命名皆對應</div>
+    <div class="legend-item"><span class="dot dot-warn"></span> 有差異：功能相同但命名/分組略有不同</div>
+    <div class="legend-item"><span class="dot dot-miss"></span> 尚未實作：參考程式有，我們沒有</div>
+    <div class="legend-item"><span class="dot dot-extra"></span> 額外實作：我們多實作，參考程式未見於日誌</div>
+    <div class="legend-item"><span class="tag tag-btn">Button</span> 可點擊操作按鈕</div>
+    <div class="legend-item"><span class="tag tag-event">Event Row</span> 非按鈕事件等待列</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 1 : L1 Initial Test
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 1 &nbsp;—&nbsp; L1 Initial Test</h2>
+      <span class="badge">L1InitialTestPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>EstablishCommunicationTest_S1F13</code></td>
+          <td>"Host-to-Equipment (send S1F13)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Section 2，發送 S1F13 建立通訊</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>— (未見於日誌)</td>
+          <td>"Equipment-to-Host (receive S1F13)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>主動等待設備 S1F13，我們額外實作</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>TSMCExcelFileTemplate_ImportExcelFile</code></td>
+          <td>"Import Excel File"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Section 3，匯入 Excel 範本</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>— (未見於日誌)</td>
+          <td>"Open Template File"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>額外開啟 Excel 預覽</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>ControlModeCheck_S1F15</code><br>(Equipment observe S6F11)</td>
+          <td>"Equipment Set Offline" <span class="tag tag-event">Event Row</span><br>"Host Set Offline (S1F15)" <span class="tag tag-btn">Button</span></td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>參考程式僅有 Host 指令按鈕；我們拆為「設備觀察事件列」＋「Host 指令按鈕」，更完整</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>ControlModeCheck_S1F17</code></td>
+          <td>"Equipment Set Online" (event) + "Host Set Online (S1F17)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>同上，拆為觀察 + 控制</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>ControlModeCheck_S2F41_Local</code></td>
+          <td>"Equipment Set Local" (event) + "Host Set Local (S2F41)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>同上</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>ControlModeCheck_S2F41_Remote</code></td>
+          <td>"Equipment Set Remote" (event) + "Host Set Remote (S2F41)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>同上</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>DefineEventReportTest_DefineEventReport</code></td>
+          <td>"Run Define Event Report Test"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Section 5，含 8 步驟完整流程</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>AccessModeCheck_S3F27_Manual</code></td>
+          <td>"Test MANUAL (S3F27)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Section 6，功能相同，命名稍異</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>AccessModeCheck_S3F27_Auto</code></td>
+          <td>"Test AUTO (S3F27)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Section 6，功能相同，命名稍異</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 2 : L1 Normal Scenario
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 2 &nbsp;—&nbsp; L1 Normal Scenario Check</h2>
+      <span class="badge">L1NormalScenarioPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- ── Loading Scenario ── -->
+        <tr><td colspan="5" style="background:#e8f4fd;font-weight:600;padding:6px 10px;color:#1a5a8a;">▸ Loading Scenario</td></tr>
+        <tr class="row-ok">
+          <td><code>LoadingScenario_SendS1F3toQueryPortStatus</code></td>
+          <td>"1) Send S1F3 to Query Port Status"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Loading Scenario 步驟 1，S1F3 查詢 Port 狀態</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"2) Carrier Placement" / "3) Auto Clamp Event" / "4) Auto Read Carrier ID"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>等待設備事件；CEID 1006；自動從 S6F11 提取 Carrier ID — 我們額外明確標示</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>LoadingScenario_BypassManuallyEnterPortIDandCarrierID</code></td>
+          <td>"Bypass: Manually Enter Port ID &amp; Carrier ID"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>手動 Bypass 輸入</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"5) Proceed With Carrier" → "6) Auto Docking Event" → "7) Auto Open Door Event" → "8) Slot Mapping Data"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>步驟 4 後自動觸發 S3F17，後續事件等待列 — 我們額外實作</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <!-- ── Processing Scenario ── -->
+        <tr><td colspan="5" style="background:#e8f4fd;font-weight:600;padding:6px 10px;color:#1a5a8a;">▸ Processing Scenario</td></tr>
+        <tr class="row-warn">
+          <td><code>ProcessingScenario_StartProcessing</code></td>
+          <td>"9) Proceed With Carrier" → 點擊後彈出 S3F17ProceedDialog 視窗（可設定 ContentMap 等屬性）</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>已新增設定對話視窗（CarrierID/PortID/ContentMap slots）；功能對應，命名略異</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>ProcessingScenario_PPSelectStartOrPJCJ</code></td>
+          <td>"10) PPSelect &amp; Start OR Create Process Job (E40)" — S2F41 PPSelect/PPStart + S16F15 PJCreate</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>功能對應；原含 CJ Create 已拆出為步驟 11；按鈕名稱略異</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>ProcessingScenario_CreateControlJob1</code></td>
+          <td>"11) Create Control Job (S14F9, E94)" — 獨立按鈕</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>已從步驟 10 拆出，與參考程式一致</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"12) Control Job Start Event" ～ "18) Auto Door Closed Event"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>我們額外實作 7 個事件等待列（步驟 12–18）</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <!-- ── Unloading Scenario ── -->
+        <tr><td colspan="5" style="background:#e8f4fd;font-weight:600;padding:6px 10px;color:#1a5a8a;">▸ Unloading Scenario</td></tr>
+        <tr class="row-warn">
+          <td><code>UnloadingScenario_StartUnloading</code></td>
+          <td>"19) Undock/Unclamp OR Carrier Release Command" (S3F17 CarrierRelease)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>功能對應，命名略異；位於步驟 19（重新編號後）</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>UnloadingScenario_SendS1F3toQueryProcessJobState</code></td>
+          <td>"23) Send S1F3 to Query Process Job State"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>功能對應，位於步驟 23（重新編號後）</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"24) Send S16F19 PRGetAllJobs" / "25) Send S16F21 PRGetSpace"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>我們額外實作兩個 Unloading 後查詢按鈕</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"20) Undocking Event" / "21) Unclamp Event" / "22) Ready to Unload Event" / "26) Carrier Removed Event" / "27) Ready to Load Event"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>我們額外實作 5 個 Unloading 事件等待列</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <!-- ── Multi Lot Testing ── -->
+        <tr><td colspan="5" style="background:#e8f4fd;font-weight:600;padding:6px 10px;color:#1a5a8a;">▸ Multi Lot Testing Tab</td></tr>
+        <tr class="row-warn">
+          <td><code>LoadingforMultiLotTesting_TestingPort1CarrierIDReadEvent</code></td>
+          <td>"1) Test Port1 Carrier ID Read Event" — 我們實作為 Event Row（被動等待）</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>參考程式有主動按鈕；我們改為被動等待 S6F11 事件</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>JobStartingforMultiLotTesting_Port1ProceedSlotMap</code></td>
+          <td>"4) Port1 Proceed SlotMap" (S3F17 ProceedWithSlotMap)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>完整對應</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>JobStartingforMultiLotTesting_CreateProcessJob1</code></td>
+          <td>"5) Create ProcessJob (PJ1)" (S16F15)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>完整對應</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>JobStartingforMultiLotTesting_CreateProcessJob2</code></td>
+          <td>"6) Create ProcessJob (PJ2)" (S16F15)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>完整對應</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"7) Create ControlJob (CJ1)" (S14F9)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>我們在 Multi Lot 額外實作 CJ Create 按鈕（參考程式無對應）</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"2) Proceed With Carrier Bypass CarrierID Event" / "3) SlotMap Event" / "8)～15) 事件等待列"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>我們額外實作 Multi Lot 完整事件鏈（PJ/CJ Start / Wafer / Complete）</td>
+          <td class="status-icon">➕</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 3 : L2 Recipe
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 3 &nbsp;—&nbsp; L2 Recipe</h2>
+      <span class="badge">L2RecipePage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>PPIDListInquiry_PPIDListInquiry</code></td>
+          <td>"(1.1) PPID List Inquiry (S7F19)" × 2 (Main/Sub Del 區各一)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F19，對應正確</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>RecipeBodyUploadAndDownload_Main_FormattedRecipeBodyUpload</code></td>
+          <td>"(2.1) Formatted Recipe Body Upload"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F25 Main Formatted Upload</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>RecipeBodyUploadAndDownload_Main_UnFormattedRecipeBodyUpload</code></td>
+          <td>"(3.1) UnFormatted Recipe Body Upload"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F5 Main Unformatted Upload</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>RecipeBodyUploadAndDownload_Sub_FormattedRecipeBodyUpload</code></td>
+          <td>"(4.1) Formatted Recipe Body Upload" (Sub)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F25 Sub Formatted Upload</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>RecipeBodyUploadAndDownload_Sub_UnFormattedRecipeBodyUpload</code></td>
+          <td>"(5.1) UnFormatted Recipe Body Upload" (Sub)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F5 Sub Unformatted Upload</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>DeleteRecipe_Main_DeleteRecipe</code></td>
+          <td>"(6.1) Delete Recipe (Main Recipe)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F17 Main</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>DeleteRecipe_Sub_DeleteRecipe</code></td>
+          <td>"(7.1) Delete Recipe (Sub Recipe)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S7F17 Sub</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"(2.2) Formatted Recipe Body Download" + "(3.2) UnFormatted Recipe Body Download"<br>"(4.2)/(5.2)" (Sub Download)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>參考日誌未見 Download 按鈕，我們額外提供 S7F23/S7F3 Upload 功能（Upload = 設備→Host; Download = Host→設備）</td>
+          <td class="status-icon">➕</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 4 : L2 EC/VID
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 4 &nbsp;—&nbsp; L2 EC/VID</h2>
+      <span class="badge">L2EcVidPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>QueryAllDVID_S1F21DataVariableNamelistRequest</code></td>
+          <td>"S1,F21 Data Variable Namelist Request"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S1F21 查詢所有 DVID</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>QueryAllCEIDVID_S1F23CollectionEventNamelistRequest</code></td>
+          <td>"S1,F23 Collection Event Namelist Request"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S1F23 查詢所有 CEID</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>QueryAllSVID_S1F11StatusVariableNamelistRequest</code></td>
+          <td>"S1,F11 Status Variable Namelist Request"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S1F11 查詢所有 SVID</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>QueryAllECID_S2F29EquipmentConstantNamelistRequest</code></td>
+          <td>"S2,F29 Equipment Constant Namelist Request"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S2F29 查詢所有 ECID</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>QuerySingleECID_S2F13EquipmentConstantRequest</code></td>
+          <td>"S2,F13 Equipment Contant Request" (Query Single)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S2F13 查詢單一 ECID</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>SetSingleECID_S2F15NewEquipmentConstantSend</code></td>
+          <td>"S2,F15 New Equipment Contant Send"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S2F15 設定單一 ECID</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"S2,F13 Equipment Contant Request" (Set 後 Read Back)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>設定後立即回讀驗證，我們額外實作</td>
+          <td class="status-icon">➕</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 5 : L2 Alarm Management
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 5 &nbsp;—&nbsp; L2 Alarm Management</h2>
+      <span class="badge">L2AlarmPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>EnableAllAlarms_EnableAllAlarms</code></td>
+          <td>"(1.1) Enable All Alarms"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S5F3 Enable ALL</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>DisableAllAlarms_DisableAllAlarms</code></td>
+          <td>"(2.1) Disable All Alarms"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S5F3 Disable ALL</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>QueryAlarmInformation_QueryAlarmList</code></td>
+          <td>"(3.1) Query Alarm List (host send S5,F5)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S5F5 查詢所有 Alarm</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>QueryEnabledAlarmInformation_QueryEnabledAlarmList</code></td>
+          <td>"(4.1) Query Enable Alarm List (host send S5,F7)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S5F7 查詢已啟用 Alarm</td>
+          <td class="status-icon">✅</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 6 : L2 Cancel / Stop / Abort
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 6 &nbsp;—&nbsp; L2 Cancel / Stop / Abort</h2>
+      <span class="badge">L2CancelStopAbortPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>CIDReadFailCancelCarrier_TestingCarrierIDReadEvent</code></td>
+          <td>"1) Testing Carrier ID Read Event" (CIDReadFail Tab)</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>等待 S6F11 Carrier ID Read</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>— (日誌僅有 CIDReadFail Tab 記錄)</td>
+          <td>Tab 1: CIDReadFail — "2) Cancel Carrier" + 3/4/5 事件列</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S3F17 CancelCarrier，我們完整實作</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>Tab 1: SlotMapFail — Proceed With Carrier + SlotMap + Cancel + Unload 流程</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>完整 SlotMapFail 流程</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>Tab 2: PJ Abort / PJ Stop (S16F5)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Process Job Stop/Abort 兩種情境</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>Tab 3: CJ Abort / CJ Stop (S16F27)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>Control Job Stop/Abort 兩種情境</td>
+          <td class="status-icon">➕</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="section-note">
+      ⚠️ 注意：參考程式日誌中本 Form 僅出現一個 ButtonClick 記錄（測試者未完整執行），其餘步驟無從比對，但我們的實作已完整覆蓋所有情境。
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 7 : L2 Trace Data Collection
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 7 &nbsp;—&nbsp; L2 Trace Data Collection</h2>
+      <span class="badge">L2TraceDataCollectionPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>StartTraceDataCollection_DefineTrace_S2F23_ID_1</code></td>
+          <td>"(1.1) Define Trace &amp; Start Collection (S2F23 ID=1)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S2F23 定義 Trace，開始收集</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>StopTraceDataCollection_StopTraceData_S2F23_ID_2</code></td>
+          <td>"(2.2) Stop Trace Data Collection (S2F23 ID=2)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>S2F23 停止 Trace</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>StopTraceDataCollection_DefineTrace_S2F23_ID_2</code></td>
+          <td>"(2.1) Define Trace ID=2 (Stop-purpose)"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>先定義 ID=2 再停止，我們對應實作，但按鈕命名略有差異</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>"(1.2) Trace Data Reported (S6F1)" / "(2.2)/(3.3)/(3.6)"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>等待 S6F1 Trace 資料事件，我們額外實作</td>
+          <td class="status-icon">➕</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FORM 8 : L2 Concurrent Run
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Form 8 &nbsp;—&nbsp; L2 Concurrent Run</h2>
+      <span class="badge">L2ConcurrentRunPage.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 ButtonClick 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>Port1Loading_TestingPort1CarrierIDReadEvent</code></td>
+          <td>"1) Testing Port1 Carrier ID Read Event"</td>
+          <td><span class="tag tag-event">Event Row</span></td>
+          <td>Section 1: Port1 Loading 步驟 1</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>Port1: 步驟 2~5 (Proceed, SlotMap, ProceedSlotMap, Create PJ1/CJ1)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>完整 Port1 Loading 流程</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>Section 2: Port2 Loading 步驟 6~10</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>完整 Port2 並行流程</td>
+          <td class="status-icon">➕</td>
+        </tr>
+        <tr class="row-extra">
+          <td>—</td>
+          <td>Section 3: Job Start (CJ1/PJ1/CJ2/PJ2 Start)</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>並行 Job 啟動控制</td>
+          <td class="status-icon">➕</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="section-note">
+      ⚠️ 注意：參考程式日誌中本 Form 僅出現 Port1 最初那個按鈕，推測測試者僅執行到開頭就切換，故大部分按鈕未留日誌，但我們已完整實作整個 Concurrent 流程。
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MainForm 工具列
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="card">
+    <div class="card-header" style="background:#3d5a80;">
+      <h2>MainForm 工具列（頂部按鈕）</h2>
+      <span class="badge">MainForm.cs</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-ref">參考程式 Command 名稱</th>
+          <th class="col-ours">HostSimTester 實作</th>
+          <th class="col-type">類型</th>
+          <th class="col-note">備註</th>
+          <th class="col-status">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-ok">
+          <td><code>ProvideRequireInfo_OK</code></td>
+          <td>"ProvideRequireInfo"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>連線設定對話框</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>SecsConnect</code></td>
+          <td>"SecsConnect"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>建立 HSMS 連線</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>— (Disconnect)</code></td>
+          <td>"Disconnect"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>斷線</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-ok">
+          <td><code>HostSendS1F13</code></td>
+          <td>"Host S1F13"</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>工具列快捷發送 S1F13</td>
+          <td class="status-icon">✅</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>ShowConfig / ConfigCancel</code></td>
+          <td>整合到 ProvideRequireInfo Dialog</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>參考程式有獨立 Config 顯示/取消；我們整合為單一 Dialog</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+        <tr class="row-warn">
+          <td><code>GetSmdPath / OpenExcelConfig / UploadExcelFile / ShowExcel</code></td>
+          <td>整合到 L1 Initial 頁面的 Import Excel 流程</td>
+          <td><span class="tag tag-btn">Button</span></td>
+          <td>參考程式在主視窗有獨立 Excel 相關按鈕；我們移入頁面內</td>
+          <td class="status-icon">⚠️</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  // 計算統計
+  const rows = document.querySelectorAll('tbody tr');
+  let ok = 0, warn = 0, miss = 0, extra = 0;
+  rows.forEach(r => {
+    if (r.classList.contains('row-ok'))    ok++;
+    if (r.classList.contains('row-warn'))  warn++;
+    if (r.classList.contains('row-miss'))  miss++;
+    if (r.classList.contains('row-extra')) extra++;
+  });
+  document.getElementById('cnt-ok').textContent    = ok;
+  document.getElementById('cnt-warn').textContent  = warn;
+  document.getElementById('cnt-miss').textContent  = miss;
+  document.getElementById('cnt-extra').textContent = extra;
+</script>
+</body>
+</html>

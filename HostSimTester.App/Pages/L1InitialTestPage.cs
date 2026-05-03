@@ -31,7 +31,7 @@ public sealed class L1InitialTestPage : BaseTestPage
 
         var tabTests = new TabControl
         {
-            Width = 960,
+            Width = 1150,
             Height = 600,
             Margin = new Padding(0),
             Padding = new Point(12, 6)
@@ -55,8 +55,7 @@ public sealed class L1InitialTestPage : BaseTestPage
 
         var gridMain = new TableLayoutPanel
         {
-            Width = 940,
-            Height = 530,
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
             Padding = new Padding(4),
@@ -69,8 +68,7 @@ public sealed class L1InitialTestPage : BaseTestPage
 
         var gridControlMode = new TableLayoutPanel
         {
-            Width = 940,
-            Height = 530,
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
             Padding = new Padding(4),
@@ -83,8 +81,7 @@ public sealed class L1InitialTestPage : BaseTestPage
 
         var gridEventAccess = new TableLayoutPanel
         {
-            Width = 940,
-            Height = 530,
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
             Padding = new Padding(4),
@@ -113,11 +110,11 @@ public sealed class L1InitialTestPage : BaseTestPage
         commBody.Controls.Add(new Label { Text = "Establish communication (equipment-to-host)", Width = 360, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
         AddActionTo(commBody, "Equipment-to-Host (receive S1F13)", () =>
         {
-            // 若連線過程中已自動收過 S1F13（60 秒內），直接視為成功
-            if (connection.LastS1F13ReceivedAt.HasValue &&
-                (DateTime.Now - connection.LastS1F13ReceivedAt.Value).TotalSeconds <= 60)
+            // 若連線後任一時刻已收過 S1F13，直接視為成功，避免測試步驟晚於 60 秒造成誤判。
+            if (connection.LastS1F13ReceivedAt.HasValue)
             {
                 Logger.Info("S1F13 already received at " + connection.LastS1F13ReceivedAt.Value.ToString("HH:mm:ss"));
+                AppendResult("[INFO] Equipment-to-Host check passed by previously received S1F13.");
                 return Task.CompletedTask;
             }
             return WaitPrimaryAsync("L1Initial_WaitS1F13", 1, 13, 30);
@@ -127,7 +124,7 @@ public sealed class L1InitialTestPage : BaseTestPage
 
         var excelBody = CreateSectionBody(excelSection);
         excelBody.Controls.Add(new Label { Text = "Step 1. Open the TSMC Excel template", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
-        excelBody.Controls.Add(new Label { Text = "Step 2. Vendor fills out and imports the Excel file", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 0, 6, 0) });
+        excelBody.Controls.Add(new Label { Text = "Step 2. Vendor fills in and imports the Excel file", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 0, 6, 0) });
 
         _txtTemplatePath = new TextBox
         {
@@ -150,7 +147,21 @@ public sealed class L1InitialTestPage : BaseTestPage
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     _txtTemplatePath.Text = dialog.FileName;
+                    AppSession.MarkL1InitialExcelImported(dialog.FileName);
                     Logger.Info($"Imported template path: {dialog.FileName}");
+                    AppendResult($"[INFO] L1 Initial Excel imported: {Path.GetFileName(dialog.FileName)}");
+                    try
+                    {
+                        var content = Excel.ExcelTemplateReader.Read(dialog.FileName);
+                        AppSession.SetL1InitialTemplateContent(content.Ceids, content.Dvids, content.Rptids);
+                        AppendResult($"[INFO] Parsed template -> CEIDs={content.Ceids.Count}, DVIDs={content.Dvids.Count}, RPTIDs={content.Rptids.Count}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(ex, "Excel parse failed; will treat as empty template.");
+                        AppSession.SetL1InitialTemplateContent(Array.Empty<uint>(), Array.Empty<uint>(), Array.Empty<uint>());
+                        AppendResult($"[WARN] Template parse failed: {ex.Message}. Will run flow without per-ID verification.");
+                    }
                     return Task.CompletedTask;
                 }
 
@@ -199,26 +210,117 @@ public sealed class L1InitialTestPage : BaseTestPage
         AddActionTo(hostControlBody, "Host Set Remote (S2F41)", () => SendHostModeAndTrackAsync("L1Initial_S2F41_SetRemote", 2, 41, Secs.SecsMessageFactory.S2F41HostCommand("GO-REMOTE"), EquipRemoteAction), 250);
 
         var defineEventBody = CreateSectionBody(defineEventSection);
-        defineEventBody.Controls.Add(new Label { Text = "Run all 8 steps in one click using sample CEID/RPTID/DVID", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
+        defineEventBody.Controls.Add(new Label { Text = "Run all 8 steps in one click with sample CEID/RPTID/DVID", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
         AddActionTo(defineEventBody, "Run Define Event Report Test", async () =>
         {
-            await SendAsync("L1Initial_Step1_VerifyCEID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step2_VerifyDVID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step3_DisableAllEvent_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(false)).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step4_UnlinkEventReport_S2F35", 2, 35, Secs.SecsMessageFactory.S2F35UnlinkAllReports()).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step5_DeleteAllEventReport_S2F33", 2, 33, Secs.SecsMessageFactory.S2F33DeleteAllReports()).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step6_DefineEventReport_S2F33", 2, 33, Secs.SecsMessageFactory.S2F33DefineReport(1, [101001, 101002])).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step7_LinkEventReport_S2F35", 2, 35, Secs.SecsMessageFactory.S2F35LinkEventReport(1001, 1)).ConfigureAwait(true);
+            // Step order aligned with reference TSMC Tester:
+            // 1) DisableAllEvent  2) UnlinkEventReport  3) DeleteAllEventReport
+            // 4) VerifyEachCEID (one S2F37 per CEID from Excel)
+            // 5) VerifyEachDVID (one S2F37 per DVID from Excel)
+            // 6) DefineEventReport  7) LinkEventReport  8) EnableEventReport
+            await SendAsync("L1Initial_Step1_DisableAllEvent_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(false)).ConfigureAwait(true);
+            await SendAsync("L1Initial_Step2_UnlinkEventReport_S2F35", 2, 35, Secs.SecsMessageFactory.S2F35UnlinkAllReports()).ConfigureAwait(true);
+            await SendAsync("L1Initial_Step3_DeleteAllEventReport_S2F33", 2, 33, Secs.SecsMessageFactory.S2F33DeleteAllReports()).ConfigureAwait(true);
+
+            var ceids = AppSession.L1InitialCeids;
+            if (ceids.Count == 0)
+            {
+                AppendResult("[INFO] Step4 VerifyEachCEID: no CEIDs from Excel, sending one fallback S2F37.");
+                await SendAsync("L1Initial_Step4_VerifyCEID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+            }
+            else
+            {
+                AppendResult($"[INFO] Step4 VerifyEachCEID: {ceids.Count} CEIDs from Excel.");
+                foreach (var ceid in ceids)
+                {
+                    await SendAsync($"L1Initial_Step4_VerifyCEID_{ceid}_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+                }
+            }
+
+            var dvids = AppSession.L1InitialDvids;
+            if (dvids.Count == 0)
+            {
+                AppendResult("[INFO] Step5 VerifyEachDVID: no DVIDs from Excel, sending one fallback S2F37.");
+                await SendAsync("L1Initial_Step5_VerifyDVID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+            }
+            else
+            {
+                AppendResult($"[INFO] Step5 VerifyEachDVID: {dvids.Count} DVIDs from Excel.");
+                foreach (var dvid in dvids)
+                {
+                    await SendAsync($"L1Initial_Step5_VerifyDVID_{dvid}_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+                }
+            }
+
+            var rptids = AppSession.L1InitialRptids.Count > 0
+                ? AppSession.L1InitialRptids.Where(x => x <= ushort.MaxValue).Distinct().ToArray()
+                : [1u];
+            var defineDvids = AppSession.L1InitialDvids.Count > 0
+                ? AppSession.L1InitialDvids.Distinct().ToArray()
+                : [101001u, 101002u];
+
+            AppendResult($"[INFO] Step6 DefineEventReport: RPTIDs={string.Join(",", rptids)}, DVIDs={defineDvids.Length}");
+            foreach (var rptid in rptids)
+            {
+                await SendAsync($"L1Initial_Step6_DefineEventReport_RPTID_{rptid}_S2F33", 2, 33,
+                    Secs.SecsMessageFactory.S2F33DefineReport(rptid, defineDvids)).ConfigureAwait(true);
+            }
+
+            var linkCeids = AppSession.L1InitialCeids.Count > 0
+                ? AppSession.L1InitialCeids.Distinct().ToArray()
+                : [1001u];
+            AppendResult($"[INFO] Step7 LinkEventReport: CEIDs={linkCeids.Length}, RPTIDs={rptids.Length}");
+            foreach (var ceid in linkCeids)
+            {
+                foreach (var rptid in rptids)
+                {
+                    await SendAsync($"L1Initial_Step7_LinkEventReport_CEID_{ceid}_RPTID_{rptid}_S2F35", 2, 35,
+                        Secs.SecsMessageFactory.S2F35LinkEventReport(ceid, rptid)).ConfigureAwait(true);
+                }
+            }
+
+            // Diagnostic summary for quick comparison with reference tester logs.
+            var ceidPreview = string.Join(",", linkCeids.Take(20)) + (linkCeids.Length > 20 ? ",..." : string.Empty);
+            var rptidPreview = string.Join(",", rptids.Take(20)) + (rptids.Length > 20 ? ",..." : string.Empty);
+            var dvidPreview = string.Join(",", defineDvids.Take(30)) + (defineDvids.Length > 30 ? ",..." : string.Empty);
+            AppendResult($"[DEBUG] DefineEvent summary: CEIDs({linkCeids.Length})=[{ceidPreview}] RPTIDs({rptids.Length})=[{rptidPreview}] DVIDs({defineDvids.Length})=[{dvidPreview}]");
+            Logger.Info("DefineEvent summary: CEIDs({ceidCount})=[{ceids}] RPTIDs({rptCount})=[{rptids}] DVIDs({dvidCount})=[{dvids}]",
+                linkCeids.Length,
+                ceidPreview,
+                rptids.Length,
+                rptidPreview,
+                defineDvids.Length,
+                dvidPreview);
+
+            // Carrier-related DVIDs should come from Excel template mapping.
+            // Typical E87 set in your template: 2000(CarrierID), 443(CarrierIDStatus), 444(CarrierAccessingStatus), 446(ContentMap).
+            var keyCarrierDvids = defineDvids.Where(d => d is 2000u or 443u or 444u or 446u).Distinct().ToArray();
+            if (keyCarrierDvids.Length == 0)
+            {
+                AppendResult("[WARN] DefineEvent DVID list does not include 2000/443/444/446. Carrier-related fields may not be reported in S6F11.");
+                Logger.Warn("DefineEvent DVID list does not include 2000/443/444/446. Carrier-related fields may not be reported in S6F11.");
+            }
+            else
+            {
+                AppendResult($"[INFO] DefineEvent includes carrier-related DVIDs: {string.Join(",", keyCarrierDvids)}");
+                Logger.Info("DefineEvent includes carrier-related DVIDs: {dvids}", string.Join(",", keyCarrierDvids));
+            }
+
             await SendAsync("L1Initial_Step8_EnableEventReport_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+            AppSession.MarkL1InitialDefineEventCompleted();
             AppendResult("[INFO] Define Event Report Test completed (8 steps).");
+            if (AppSession.IsL1InitialCompleted)
+            {
+                AppendResult("[INFO] L1 Initial completed. You can continue to L1 Normal/L2 tabs.");
+            }
         }, 280);
 
         var accessModeBody = CreateSectionBody(accessModeSection);
-        accessModeBody.Controls.Add(new Label { Text = "Set LoadPort count and Port IDs (comma separated)", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
-        accessModeBody.Controls.Add(new Label { Text = "LoadPort Count", Width = 120, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 6, 6, 0) });
+        accessModeBody.Controls.Add(new Label { Text = "Set load port count and port IDs (comma-separated)", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
+        accessModeBody.Controls.Add(new Label { Text = "Load Port Count", Width = 120, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 6, 6, 0) });
         _txtLoadPortCount = new TextBox { Width = 180, Height = 24, BackColor = Theme.ThemeHelper.TableBg, Margin = new Padding(34, 0, 6, 4), Text = "2" };
         accessModeBody.Controls.Add(_txtLoadPortCount);
-        accessModeBody.Controls.Add(new Label { Text = "Port IDs (e.g. 1,2,3)", Width = 180, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
+        accessModeBody.Controls.Add(new Label { Text = "Port IDs (e.g., 1,2,3)", Width = 180, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
         _txtPortIds = new TextBox { Width = 260, Height = 24, BackColor = Theme.ThemeHelper.TableBg, Margin = new Padding(34, 0, 6, 4), Text = "1,2" };
         accessModeBody.Controls.Add(_txtPortIds);
 
@@ -273,10 +375,13 @@ public sealed class L1InitialTestPage : BaseTestPage
             return;
         }
 
-        BeginInvoke(() => HandleEquipmentS6F11(wrapper.PrimaryMessage.ToString()));
+        // Object-level CEID extraction (S6F11 = L[3]( DataID, CEID, ReportList )).
+        Secs.SecsPayload.TryGetS6F11Ceid(wrapper.PrimaryMessage, out var ceid);
+        var raw = wrapper.PrimaryMessage.ToString();
+        BeginInvoke(() => HandleEquipmentS6F11(raw, ceid));
     }
 
-    private void HandleEquipmentS6F11(string raw)
+    private void HandleEquipmentS6F11(string raw, uint ceid)
     {
         if (TryExtractActionByKeyword(raw, out var actionByKeyword))
         {
@@ -285,7 +390,7 @@ public sealed class L1InitialTestPage : BaseTestPage
             return;
         }
 
-        if (!TryExtractCeid(raw, out var ceid))
+        if (ceid == 0)
         {
             return;
         }
@@ -310,7 +415,7 @@ public sealed class L1InitialTestPage : BaseTestPage
     private static bool TryExtractCeid(string raw, out uint ceid)
     {
         ceid = 0;
-        var match = Regex.Match(raw, @"<U4\s*\[\d+\]\s*\d+\s*>\s*<U4\s*\[\d+\]\s*(\d+)\s*>", RegexOptions.Singleline);
+        var match = Regex.Match(raw, @"<U(?:1|2|4|8)\s*\[\d+\]\s*\d+\s*>\s*<U(?:1|2|4|8)\s*\[\d+\]\s*(\d+)\s*>", RegexOptions.Singleline);
         return match.Success && uint.TryParse(match.Groups[1].Value, out ceid);
     }
 

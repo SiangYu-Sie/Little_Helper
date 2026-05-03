@@ -11,6 +11,7 @@ public sealed class MainForm : Form
 {
     private readonly Logger _uiLogger = LogManager.GetLogger(LoggerNames.Ui);
     private readonly Secs.SecsConnection _secsConnection = new();
+    private readonly TabControl _mainTab = new();
 
     private readonly ToolStripStatusLabel _lblStatus = new();
     private readonly RichTextBox _logBox = new();
@@ -39,11 +40,9 @@ public sealed class MainForm : Form
     {
         ThemeHelper.ApplyTheme(this);
 
-        var root = new SplitContainer
+        var root = new Panel
         {
             Dock = DockStyle.Fill,
-            Orientation = Orientation.Vertical,
-            SplitterDistance = 1060,
             BackColor = ThemeHelper.IceSurface
         };
 
@@ -73,18 +72,18 @@ public sealed class MainForm : Form
 
         topPanel.Controls.Add(actionPanel);
 
-        var tab = new TabControl { Dock = DockStyle.Fill };
-        AddTab(tab, "L1 Initial", new L1InitialTestPage(_secsConnection));
-        AddTab(tab, "L1 Normal Scenario", new L1NormalScenarioPage(_secsConnection));
-        AddTab(tab, "L2 Concurrent", new L2ConcurrentRunPage(_secsConnection));
-        AddTab(tab, "L2 CancelStopAbort", new L2CancelStopAbortPage(_secsConnection));
-        AddTab(tab, "L2 Alarm", new L2AlarmPage(_secsConnection));
-        AddTab(tab, "L2 Recipe", new L2RecipePage(_secsConnection));
-        AddTab(tab, "L2 Trace", new L2TraceDataCollectionPage(_secsConnection));
-        AddTab(tab, "L2 ECVID", new L2EcVidPage(_secsConnection));
+        _mainTab.Dock = DockStyle.Fill;
+        AddTab(_mainTab, "L1 Initial", new L1InitialTestPage(_secsConnection));
+        AddTab(_mainTab, "L1 Normal Scenario", new L1NormalScenarioPage(_secsConnection));
+        AddTab(_mainTab, "L2 Concurrent", new L2ConcurrentRunPage(_secsConnection));
+        AddTab(_mainTab, "L2 CancelStopAbort", new L2CancelStopAbortPage(_secsConnection));
+        AddTab(_mainTab, "L2 Alarm", new L2AlarmPage(_secsConnection));
+        AddTab(_mainTab, "L2 Recipe", new L2RecipePage(_secsConnection));
+        AddTab(_mainTab, "L2 Trace", new L2TraceDataCollectionPage(_secsConnection));
+        AddTab(_mainTab, "L2 ECVID", new L2EcVidPage(_secsConnection));
 
         var left = new Panel { Dock = DockStyle.Fill };
-        left.Controls.Add(tab);
+        left.Controls.Add(_mainTab);
         left.Controls.Add(topPanel);
 
         _logBox.Dock = DockStyle.Fill;
@@ -93,8 +92,7 @@ public sealed class MainForm : Form
         _logBox.ForeColor = ThemeHelper.LogText;
         _logBox.Font = new Font("Consolas", 9F);
 
-        root.Panel1.Controls.Add(left);
-        root.Panel2.Controls.Add(_logBox);
+        root.Controls.Add(left);
 
         var status = new StatusStrip { BackColor = ThemeHelper.NavyPanel };
         _lblStatus.Text = "Disconnected";
@@ -108,6 +106,28 @@ public sealed class MainForm : Form
     private void WireEvents()
     {
         UiLogTarget.LogReceived += OnUiLogReceived;
+        _mainTab.Selecting += (_, e) =>
+        {
+            if (e.TabPageIndex <= 0)
+            {
+                return;
+            }
+
+            if (AppSession.IsL1InitialCompleted)
+            {
+                return;
+            }
+
+            e.Cancel = true;
+            _uiLogger.Warn("L1 Initial is not completed. Complete Excel import and Define Event Report before continuing.");
+            MessageBox.Show(
+                this,
+                "請先完成 L1 Initial：\n1) Import Excel File\n2) Run Define Event Report Test\n\n完成後才可切換到 L1 Normal / L2。",
+                "L1 Initial 未完成",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        };
+
         _secsConnection.ConnectionStateChanged += state =>
         {
             BeginInvoke(async () =>

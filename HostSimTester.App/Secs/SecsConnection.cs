@@ -99,6 +99,12 @@ public sealed class SecsConnection : IAsyncDisposable
         primary.SecsItem = payload;
 
         _uiLogger.Info($"Start send primary S{stream}F{function} Operation=[{operationName}]");
+        _uiLogger.Info("Send primary body S{stream}F{function} Operation=[{operation}]:{newline}{body}",
+            stream,
+            function,
+            operationName,
+            Environment.NewLine,
+            SecsItemFormatter.Format(primary.SecsItem));
 
         if (!expectReply)
         {
@@ -107,6 +113,15 @@ public sealed class SecsConnection : IAsyncDisposable
         }
 
         var reply = await _secsGem.SendAsync(primary, cancellationToken).ConfigureAwait(false);
+        if (reply is not null)
+        {
+            _uiLogger.Info("Received secondary body S{stream}F{function} ReplyTo=[{operation}]:{newline}{body}",
+                reply.S,
+                reply.F,
+                operationName,
+                Environment.NewLine,
+                SecsItemFormatter.Format(reply.SecsItem));
+        }
         return reply;
     }
 
@@ -226,10 +241,40 @@ public sealed class SecsConnection : IAsyncDisposable
 
         await foreach (var primary in _secsGem.GetPrimaryMessageAsync(cancellationToken).ConfigureAwait(false))
         {
+            _uiLogger.Info("Received primary detail S{stream}F{function} Name=[{name}]:{newline}{body}",
+                primary.PrimaryMessage.S,
+                primary.PrimaryMessage.F,
+                primary.PrimaryMessage.Name,
+                Environment.NewLine,
+                SecsItemFormatter.Format(primary.PrimaryMessage.SecsItem));
+            if (primary.PrimaryMessage.S == 6 && primary.PrimaryMessage.F == 11)
+            {
+                LogS6F11Summary(primary.PrimaryMessage);
+            }
+
             HandleWaiters(primary);
             await TryAutoReplyAsync(primary, cancellationToken).ConfigureAwait(false);
             PrimaryMessageReceived?.Invoke(primary);
         }
+    }
+
+    private void LogS6F11Summary(SecsMessage message)
+    {
+        var hasDataId = SecsPayload.TryGetS6F11DataId(message, out var dataId);
+        var hasCeid = SecsPayload.TryGetS6F11Ceid(message, out var ceid);
+        var rptids = SecsPayload.GetS6F11Rptids(message);
+
+        if (!hasDataId || !hasCeid)
+        {
+            _uiLogger.Warn("S6F11 parsed summary: unable to parse DATAID/CEID.");
+            return;
+        }
+
+        _uiLogger.Info("S6F11 parsed summary: DATAID={dataId}, CEID={ceid}, EventName={eventName}, RPTIDs=[{rptids}]",
+            dataId,
+            ceid,
+            SecsPayload.GetEventName(ceid),
+            string.Join(",", rptids));
     }
 
     private void HandleWaiters(PrimaryMessageWrapper primary)
