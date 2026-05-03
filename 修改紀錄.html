@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>HostSimTester 修改紀錄</title>
+<style>
+  :root {
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --primary: #3a7bd5;
+    --primary-dark: #1f5fb3;
+    --text: #1f2a3a;
+    --muted: #5e6c84;
+    --border: #d9e2ec;
+    --tag-bg: #e8f0fb;
+    --tag-fg: #1f5fb3;
+    --warn: #c0833f;
+    --pass: #4eb45f;
+    --code-bg: #0f172a;
+    --code-fg: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft JhengHei UI", "Segoe UI", Arial, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: #fff;
+    padding: 28px 40px;
+    box-shadow: 0 4px 12px rgba(31, 95, 179, 0.18);
+  }
+  header h1 { margin: 0 0 6px 0; font-size: 22px; letter-spacing: 0.5px; }
+  header p  { margin: 0; opacity: 0.9; font-size: 13px; }
+  main { max-width: 1100px; margin: 24px auto; padding: 0 24px 60px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  h2 { margin-top: 0; font-size: 17px; color: var(--primary-dark); border-bottom: 2px solid var(--tag-bg); padding-bottom: 6px; }
+  h3 { font-size: 14px; margin: 14px 0 6px; color: #2c3e50; }
+  ul { margin: 6px 0 6px 20px; padding: 0; }
+  li { margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--tag-bg); color: var(--tag-fg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafcff; }
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--tag-fg);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .tag.warn { background: #fff1da; color: var(--warn); }
+  .tag.pass { background: #e1f5e4; color: var(--pass); }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  code { font-family: Consolas, "Cascadia Code", monospace; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .file { font-family: Consolas, monospace; color: var(--primary-dark); font-weight: 600; }
+  hr.sep { border: none; border-top: 1px dashed var(--border); margin: 16px 0; }
+  
+  /* 每個項目獨立一頁 */
+  @media print {
+    header { position: running(header-page); }
+    @page {
+      size: A4;
+      margin: 20mm;
+      @top-center { content: string(header-page); }
+    }
+    body { background: white; }
+    main { margin: 0; padding: 0; max-width: 100%; }
+    .card {
+      page-break-after: always;
+      page-break-inside: avoid;
+      margin-bottom: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 40px 0;
+      border: none;
+    }
+    .card:first-of-type { padding-top: 0; }
+    .card:last-of-type { page-break-after: auto; }
+  }
+  
+  /* 網頁檢視時的視覺分隔 */
+  .card {
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>HostSimTester 修改紀錄</h1>
+  <p>HostSimTester.App ／ .NET 8 WinForms ／ Secs4Net 2.4.4 ／ 編譯狀態：0 errors / 1 existing warning</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>1. 修改摘要 (時間軸)</h2>
+    <table>
+      <thead><tr><th style="width:80px;">階段</th><th>主題</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td>階段 A</td><td>L2 頁面修補</td><td>修正 L2 的早期 bug、依參考截圖 1~4 重排版面、套用 Tech Blue 風格、L2ConcurrentRunPage 重寫並改成 Group2/Group1/3 水平排列。</td></tr>
+        <tr><td>階段 B</td><td>移除不必要的 Config Bar</td><td>L2CancelStopAbortPage、L2TraceDataCollectionPage 不需要 sub-tab/Config Bar，重新整理為三欄、純 Label-style report row + 顯示按鈕。</td></tr>
+        <tr><td>階段 C</td><td>UI 一致性</td><td>移除預填的 Carrier ID（"TEST12345"）；L1 Normal 各 Wait 步驟改為 Label 報表列；新增灰底事件列 vs 藍色按鈕的視覺區分與雙語圖例。</td></tr>
+        <tr><td>階段 D</td><td>被動事件偵測</td><td>所有 L1 Normal 事件改為訂閱 <code>PrimaryMessageReceived</code> 自動 PASS：事件鏈轉移 (NextReportByAction)、CEID 學習 (TrackExpectedReport)。</td></tr>
+        <tr><td>階段 E</td><td>S6F11 即時監控</td><td>於 Loading section 加入 Monitor TextBox，顯示最近 10 筆 S6F11 事件 / verdict。</td></tr>
+        <tr><td>階段 F</td><td>CEID 解析強化</td><td>多階段嘗試：interpreter → raw regex；支援 U1/U2/U4/U8、含 /* CEID */ 標註與位置式 fallback。</td></tr>
+        <tr><td>階段 G</td><td>L1 Initial 連動 L1 Normal</td><td>新增 <code>AppSession</code> 完成狀態：<code>IsL1InitialExcelImported</code>、<code>IsL1InitialDefineEventCompleted</code>、<code>IsL1InitialCompleted</code>；MainForm 透過 <code>tab.Selecting</code> 阻擋未完成 L1 Initial 時切到其他 Tab。</td></tr>
+        <tr><td>階段 H</td><td>對齊參考程式</td><td>讀完 <code>參考資料/ToolSoftwareTester1.0.0.0</code>（TOOLID.xml、Test logs、Result CSVs）後完成 4 項對齊修改，詳見下節。</td></tr>
+        <tr><td>階段 I <span class="tag pass">本次</span></td><td>L1 Multi Lot 燈號分離 + L2 Concurrent Run UI 審視</td><td>L1 Multi Lot 與 Normal 燈號完全獨立、新增 PJID/SlotID 進度提示、PJ1/PJ2 共用 CEID 釐清；L2 Concurrent Run 對齊參考影像（按鈕／事件列、輸入欄位置），並依舊工具 LOG 修正 CarrierIDRead 自動抓值、快取、燈號同步、ProceedWithCarrier、PJ1 Start S16F5。</td></tr>
+        <tr><td>階段 J <span class="tag pass">本次補充</span></td><td>L2 Concurrent Run 測試方式確認</td><td>依舊工具 <code>TestLog_Level2-ConcurrentRun_20260309_2150.log</code>、目前 <code>L2ConcurrentRunPage</code> 流程，以及 E87/E90/E94 與 CEID/VID Excel 參考資料，確認 Loading &amp; Job Start 與 Job Processing 的測試方式：LOADPORT1/PJ1 為 Manual Start，LOADPORT2/PJ2 為 Auto Start；Host command 與等待 S6F11 事件列需分開判讀。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>7. 本次修改 (階段 I) — 檔案層級</h2>
+
+    <h3>7.1 <span class="tag">修改</span> <span class="file">HostSimTester.App/Pages/L1NormalScenarioPage.cs</span></h3>
+    <p>解決 Multi Lot 分頁與 Normal Scenario 分頁的燈號互相影響、PJID 不顯示、Slot ID 計數異常、PJ1/PJ2 共用 CEID 誤學等 4 個問題。</p>
+    <ul>
+      <li><b>Report 對應表分流</b>：原 <code>KnownReportByCeid</code> 拆為 <code>NormalReportByCeid</code> 與 <code>MultiLotReportByCeid</code> 兩張表（<code>uint → string</code>），各分頁查各自的 CEID 對應。</li>
+      <li><b>新增 <code>ReportScope</code> 列舉</b>（<code>Normal</code>／<code>MultiLot</code>），由 <code>tabControl.SelectedIndexChanged</code> 切換 <code>_activeReportScope</code>。</li>
+      <li><b>燈號／待處理動作／已學 CEID 全部 scope 化</b>：
+        <ul>
+          <li><code>_reportLamps</code> 改為 <code>Dictionary&lt;(ReportScope, string), Panel&gt;</code></li>
+          <li><code>_reportActionByCeid</code> 改為 <code>Dictionary&lt;(ReportScope, uint), string&gt;</code></li>
+          <li><code>PendingReportAction</code> 改由 <code>_pendingReportActionByScope</code> 字典支撐</li>
+        </ul>
+      </li>
+      <li><b>Multi Lot 起始按鈕還原</b>：新增 <code>AddReportStartButton(...)</code> helper — 外觀為藍色按鈕，但燈號仍註冊到 <code>_reportLamps</code>，按下時只把該動作標為 pending 並把燈號改為等待色，必須收到對應 S6F11 才會變綠。</li>
+      <li><b>PJID 提示</b>：Multi Lot 的 PJ1／PJ2／Wafer Start／Wafer End／Complete 列旁加上可動態刷新的 PJID/SlotID hint label，於 PJ Create 對話框結束後立即更新。</li>
+      <li><b>Wafer Slot 進度</b>：Multi Lot 的 Wafer Start／Wafer End 採用與 Normal 相同邏輯——Start 不累計、End 累計，必須所有 slot 完成才把 Start 與 End 兩盞燈一起轉綠；PJ1+PJ2 的 SlotMap 數量會自動加總成 <code>_expectedWaferSlotCount</code>。</li>
+      <li><b>PJ1／PJ2 共用 CEID 釐清</b>：在 Multi Lot scope 中，僅暫時對應到當下動作，不會被永久寫進 <code>MultiLotReportByCeid</code>，避免後續 PJ2 事件被誤判成 PJ1。</li>
+      <li><b>L1 Normal 未開始前資料誤回填修正</b>：修正尚未按下 Loading / Multi Lot 起始步驟時，背景收到其他流程或前次殘留的 S6F11 就直接把 <code>CarrierID</code>、<code>SlotMap</code> 寫到畫面並可能觸發事件燈號的問題；現在只有流程已透過 <code>TrackExpectedReport</code> 啟用對應步驟後，該步驟的資料與燈號才允許更新。</li>
+      <li><b>輔助函式</b>：<code>ResolveScopedAction(normalActionText)</code> 將 Normal 動作名稱依 <code>_activeReportScope</code> 對應到 Multi Lot 名稱；<code>TryGetReportLamp(scope, actionText, out lamp)</code> 改為以 scope 取燈；<code>TryGetKnownReportAction(ceid, ...)</code> 依目前 scope 選表。</li>
+    </ul>
+
+    <h3>7.2 <span class="tag">修改</span> <span class="file">HostSimTester.App/Pages/L2ConcurrentRunPage.cs</span></h3>
+    <p>對齊參考影像：該為按鈕的設成按鈕、不是按鈕的事件列保留為灰色等待列、移除影像中沒有的元素、補上影像中需要的輸入欄。</p>
+    <ul>
+      <li><b>L2 Concurrent Run 測試設定確認</b>：依舊工具 Concurrent Run LOG 與目前頁面流程，LOADPORT1 / Port1 對應 PJ1 Manual Start，LOADPORT2 / Port2 對應 PJ2 Auto Start。Port1 完成 CarrierIDRead、ProceedWithCarrier、SlotMap、Proceed SlotMap、Create PJ1/CJ1 後，PJ1 需停在 <code>Waiting For Start</code>，再由 Host 按 <code>Start Process Job (PJ1)</code> 送 <code>S16F5 START</code>；Port2 完成同樣 loading 流程並建立 PJ2/CJ2 後，PJ2 應由設備/ControlJob 自動 start，不需 Host 再送 <code>S16F5 START</code>。</li>
+      <li><b>L2 Concurrent Run PJID 預設與 Start 確認修正</b>：修正 <code>Start Process Job (PJ1)</code> 送出 <code>S16F5 START</code> 時仍可能使用預設 <code>PJ1</code>，造成設備回覆 <code>PROCESSJOB ObjectID(PJ1) does not exist</code> 的問題；L2 Concurrent 預設 PJ/CJ ID 改為舊工具一致的 <code>PJ001/PJ002</code>、<code>CJ001/CJ002</code>，且 Start PJ1 前會開啟 PJ Command 視窗讓使用者確認實際 PRJOBID，送出的 <code>S16F5</code> 會以視窗中的 PJ ID 為準。</li>
+      <li><b>L2 Concurrent Run CJ 建立 payload 對齊舊工具</b>：最新 LOG 顯示 <code>S16F15</code> 與 <code>S14F9</code> 均 ACK，但 <code>S16F5 START</code> 仍回 <code>PROCESSJOB ObjectID(PJ001) does not exist</code>；比對舊工具後修正 L2 Concurrent 的 <code>S14F9 ProcessingCtrlSpec</code>，CJ 建立時不再把 SlotList 帶入 PJ entry，SlotID 僅保留在 <code>S16F15</code> 的 PJ Material List，避免設備建立後 PJ/CJ 狀態與舊流程不一致。</li>
+      <li><b>S16F6 失敗判斷修正</b>：補上 <code>S16F6 ProcessJobCommand</code> 回覆解析；當設備回覆 <code>BOOLEAN False</code> 或錯誤原因時，畫面會顯示 <code>ProcessJobCommand: NAK/ERROR</code> 並將該動作判定 FAIL，不再把 START/STOP/ABORT 命令失敗誤標為 PASS。</li>
+      <li><b>L2 Concurrent Run Proceed With Carrier 顯示修正</b>：將 Port1/Port2 的 <code>Proceed With Carrier</code> 由原本旁邊的 <code>Bypass CarrierID Event</code> 小按鈕改為明確的 <code>Send Proceed With Carrier</code> 送出按鈕；CarrierIDRead 後自動送出或手動送出 <code>S3F17 ProceedWithCarrier</code> 成功時，會立即點亮對應列並在結果視窗留下 PASS 訊息，避免使用者看不出該指令是否已送出。</li>
+      <li><b>Loading &amp; Job Start 測試方式釐清</b>：1)/6) Carrier ID Read、3)/8) SlotMap Event、Job Start 區的 ControlJob/ProcessJob Start/Waiting 列皆為等待 Equipment 上報 <code>S6F11</code>；2)/7) Proceed With Carrier、4)/9) Proceed SlotMap、5)/10) Create ProcessJob &amp; ControlJob、<code>Start Process Job (PJ1)</code> 為 Host 主動送出命令，分別對應 <code>S3F17</code>、<code>S16F15</code>、<code>S14F9</code>、<code>S16F5</code>，並以 <code>S3F18</code>、<code>S16F16</code>、<code>S14F10</code>、<code>S16F6</code> 回覆與後續 <code>S6F11</code> 事件驗證。</li>
+      <li><b>Job Processing 測試方式釐清</b>：Job Processing 頁籤不是逐列送 Host command，而是在 PJ1/PJ2 start 後等待設備跑片過程依序上報 <code>S6F11</code>，包含 Recipe Start/Step Start、Chamber Start、E90 Wafer Start、E90 Substrate Location Changed Occupied/UnOccupied、Recipe Step End、E90 Wafer End、Chamber End、Recipe End、PJ/CJ End。驗證重點是事件內容中的 <code>CarrierID</code>、<code>LotID</code>、<code>SlotID</code>、<code>RecipeID</code>、<code>PJID</code>、<code>CJID</code>、<code>LocationID</code> 能正確對應前面建立的 Port/PJ/CJ/ContentMap。</li>
+      <li><b>移除</b>：各區塊頂端「藍色按鈕：主機主動命令／灰色列：等待設備事件」雙語圖例（<code>AddStepLegend</code>）。</li>
+      <li><b>按鈕 vs 事件列確認</b>（與影像逐項一致）：
+        <ul>
+          <li>藍色按鈕（主機送命令）：2)/7) Proceed With Carrier、Bypass CarrierID Event、4)/9) Proceed SlotMap、5)/10) Create PJ &amp; CJ、Start Process Job (PJ1)。</li>
+          <li>灰色事件列（等待設備 S6F11）：1)/3)/6)/8)、Job Start 區的 ControlJob 1 Start／Process Job 1 Waiting For Start／ControlJob 2 Start／ProcessJob 2 Start (PJ Auto Start)／ProcessJob 1 Start (PJ Manual Start)、Job Processing 與 Job Processing (continued) 全部項目。</li>
+        </ul>
+      </li>
+      <li><b>輸入欄位置</b>（最終版，依使用者要求放回所屬區塊，不使用上方工具列）：
+        <ul>
+          <li>1. Port1 Loading 區塊頂端：<code>P1 Carrier</code> + <code>Port</code>。</li>
+          <li>1. Port1 Loading 區塊步驟 4) 之後：<code>PPID</code>（供步驟 5) Create PJ1/CJ1 使用）。</li>
+          <li>2. Port2 Loading 區塊頂端：<code>P2 Carrier</code> + <code>Port</code>。</li>
+        </ul>
+      </li>
+      <li><b>過程中嘗試但已被使用者要求復原的中間版本</b>：曾將所有輸入欄集中到分頁頂端的工具列（含 <code>AddInput</code> helper），使用者反饋「不要工具列，輸入欄請放在所屬的位置」後已移除工具列、還原 <code>InputRow</code> helper 並把輸入欄分別放回 Port1／Port2 區塊。</li>
+      <li><b>保留</b>：「PS. PJ 1 Manual Start」、「PS. PJ 2 Auto Start」灰色說明字樣（與影像一致）。</li>
+      <li><b>依舊工具 LOG 修正 CarrierIDRead</b>：Port1／Port2 的 Carrier ID Read 按鈕改為持續等待 CEID=1000 的 S6F11；跳過 Unknown/其他 S6F11，抓到 <code>PortID</code>、<code>CarrierID</code>、<code>LocationID</code> 後回填目前頁面隱藏欄位。</li>
+      <li><b>修正 Host 已收到但燈號仍 Fail</b>：L2 Concurrent Run 訂閱 <code>PrimaryMessageReceived</code> 即時快取 Port1／Port2 CarrierIDRead；按鈕晚按時優先使用快取值，且收到 CarrierIDRead 會立即將對應測試燈轉綠。</li>
+      <li><b>L2 Concurrent CarrierIDRead 事件註冊補齊</b>：Port1／Port2 的「Testing Carrier ID Read Event」原本只有被 <code>AddActionTo</code> 註冊為按鈕燈，沒有進入 L2 Concurrent 的 <code>_eventLamps</code> 事件表；本次將同一顆按鈕燈同步註冊為 S6F11 CEID=1000 事件燈，收到 CarrierIDRead 時會以事件方式找到並點亮。</li>
+      <li><b>燈號判定拆分</b>：第一顆燈代表 CarrierIDRead 是否抓到；後續自動送 <code>S3F17 ProceedWithCarrier</code> 若設備回 NAK/ERROR，改以 WARN 記錄，不再把 CarrierIDRead 燈號覆蓋成 Fail。</li>
+      <li><b>修正綠燈又變紅</b>：<code>WaitForPrimaryAsync</code> timeout 會丟出 task canceled，原本按鈕 action 仍在等待同一筆 S6F11，導致監聽器先轉綠後又被外層 catch 改紅；現改為短輪詢並每秒檢查 CarrierIDRead 快取，抓到快取即正常結束，不再輸出 <code>A task was canceled.</code>。</li>
+      <li><b>CarrierID 解析放寬</b>：支援 <code>LOPORT1</code>／<code>LOPORT2</code> 與 <code>LOADPORT1</code>／<code>LOADPORT2</code> 推回 PortID；參考 L1 Normal Multi Lot 的抓取方式，優先以 report values[1] 當 CarrierID，再掃描其他欄位。</li>
+      <li><b>修正 CLOCK 誤判 CarrierID</b>：排除 <code>2026042911123700</code> 這類設備 CLOCK/日期時間值，避免 S3F17 ProceedWithCarrier 對話框把 CLOCK 顯示成 CarrierID；非日期格式的純數字 CarrierID 仍可保留。</li>
+      <li><b>L2 ProceedWithCarrier SlotID 接續修正</b>：S3F17 ProceedWithCarrier 對話框現在只收集有填 <code>LotID</code> 或 <code>WaferID</code> 的 ContentMap 列，並保存對應 SlotID；L2 Concurrent Run 步驟 5/10 與 L2 Cancel/Stop/Abort 的 Create PJ/CJ 共用視窗，都會以前一步 ContentMap 的有效 SlotID 作為預設，不再固定帶出 <code>["1","2","3","4","5"]</code>。例如只填 Slot1~Slot3，PJ 的 SlotID List 會預設為 <code>["1","2","3"]</code>。</li>
+      <li><b>Slot/PJ 寫死值全面複查</b>：移除 PJ/CJ 共用視窗、L2 Concurrent Run、L2 Cancel/Stop/Abort、L1 Normal / Multi Lot 中剩餘的 SlotID <code>1~5</code> 隱性 fallback；若前一步 S3F17 ContentMap 沒有有效 slot，SlotID List 會保持空白而不是自動補值。L1 Normal 與 Multi Lot 現在也改用 S3F17 對話框保存的有效 SlotID；L2 Concurrent 的 <code>Start Process Job (PJ1)</code> 會使用步驟 5 實際建立的 PJID，不再固定送 <code>PJ1</code>。</li>
+      <li><b>L2 Concurrent 事件列自動點燈</b>：新增 S6F11 事件對應機制，將 SlotMap、ControlJob/ProcessJob Start、Recipe/Chamber/Wafer/Substrate/Job End 等事件依 CEID/內容或流程順序自動點亮，不必在設備已跑完後再手動點每一列等待下一筆。</li>
+      <li><b>L2 Concurrent 燈號誤先亮修正</b>：修正頁面尚未開始測試時，因背景收到其他流程或先前殘留的 S6F11 Job Start / SlotMap 類事件而直接點亮 Loading &amp; Job Start 燈號的問題；現在 CarrierIDRead 只會先快取 CarrierID/PortID，必須使用者按下對應步驟或流程已進入該階段後，該列才允許被 S6F11 自動轉綠。</li>
+      <li><b>L2 Cancel/Stop/Abort 指令視窗補齊</b>：Cancel Carrier 改為先開啟含 Port ID/Carrier ID、CancelCarrier/CancelCarrierAtPort 兩個送出按鈕的視窗；S16F5 PJ Command ABORT/STOP 與 S16F27 CJ Command ABORT/STOP 改為先開啟對應參數視窗後再送出，Proceed SlotMap 與 Create ProcessJob & ControlJob 維持共用 L2 Concurrent Run 的設定視窗。</li>
+      <li><b>L2 Cancel/Stop/Abort 事件列自動點燈</b>：對照舊工具 LOG，CancelCarrier/CancelCarrierAtPort 收到 S3F18 後會等待 S6F11 ReadyToUnload；本次將被動事件列登記到 <code>_eventLamps</code>，並訂閱 <code>PrimaryMessageReceived</code>，收到 ReadyToUnload(CEID=1005)、ReadyToLoad(CEID=1004)、CarrierUnloadComplete(CEID=5118)、SlotMap、PJ/CJ Start/Stop/Abort/Completed 類 S6F11 後自動轉綠。</li>
+      <li><b>L2 Cancel/Stop/Abort CarrierIDRead 自動帶入</b>：修正 CancelCarrier 視窗仍顯示預設 <code>CANCEL_001</code> 的問題；現在收到 CEID=1000 CarrierIDRead 會解析 CarrierID/PortID 並寫回頁面共用狀態，SlotMapFail/PJ/CJ Stop/Abort 流程也會在第一步抓到 CarrierID 後自動送 <code>S3F17 ProceedWithCarrier</code> 並點亮「2) Proceed With Carrier」，後續 SlotMap S6F11 再點亮「3) SlotMap Report」。</li>
+      <li><b>L2 Cancel/Stop/Abort CarrierIDRead 解析邏輯一致化</b>：將 L2 Concurrent Run 原本穩定使用的 CarrierIDRead 解析搬到 <code>SecsPayload.TryExtractCarrierReadInfo</code>，L2 Concurrent Run 與 L2 Cancel/Stop/Abort 現在共用同一套邏輯；不再針對 CIDReadFail 做 CEID-only 的特殊放寬。</li>
+      <li><b>L2 Cancel/Stop/Abort 舊工具 LOG 對照補強</b>：對照 <code>ToolSoftwareTester1.0.0.0</code> 的 <code>L2CancelStopAbortTest</code> LOG 後，補齊「Testing Carrier ID Read Event」按鈕燈與 CEID=1000 事件燈的同步點亮；<code>Bypass CarrierID Event</code> 改走共用 <code>S3F17 ProceedWithCarrier</code> 流程，會同步設定流程相位並點亮「2) Proceed With Carrier」，避免後續 SlotMap S6F11 被誤判為太早收到而忽略。</li>
+      <li><b>L2 Cancel/Stop/Abort Stop/Abort 燈號對應修正</b>：S16F5 PJ Command ABORT/STOP 與 S16F27 CJ Command ABORT/STOP 送出後會先點亮第 8 步，並記錄 pending final report；後續收到 PJ Aborting/Stopping 或 CJ Completed 時，只點亮剛才命令對應的第 9 步，避免舊版收到 ControlJob Completed 就同時點亮 STOP 與 ABORT 兩列。</li>
+      <li><b>L2 Cancel/Stop/Abort 區塊燈號隔離</b>：修正 Cancel Carrier 分頁中 (1) CIDReadFail/CancelCarrier 與 (2) SlotMapFail/CancelCarrier 互相影響的問題；事件燈號不再只用顯示文字當 key，而是改用「流程區塊 + 文字」定位，避免同名列如「Testing Carrier ID Read Event」或「ReadyToUnload Report」跨區塊一起轉綠。</li>
+      <li><b>L2 Cancel/Stop/Abort CarrierIDRead 後續流程接續</b>：修正三個分頁都可能出現「1) Testing Carrier ID Read Event」已轉綠，但「2) Proceed With Carrier」與「3) SlotMap Report」停灰的問題；現在 CEID=1000 若由接收事件先捕捉到，也會依目前流程區塊自動接續送 <code>S3F17 ProceedWithCarrier</code>，並以區塊 scope 保存流程階段，避免上一個區塊的 Proceed/SlotMap/Stop/Abort 狀態影響下一個區塊。</li>
+      <li><b>L2 Cancel/Stop/Abort STOP/ABORT 行為釐清</b>：依 SECS 參考資料，<code>S16F5</code> 與 <code>S16F27</code> 是主機下達 PJ/CJ 命令要求，送出成功後只代表命令已被送出/回覆，設備是否已進入 stopping/aborting/completed 需等待後續 S6F11 狀態事件；因此第 8 步可立即點亮，第 9 步仍以設備實際事件回報為準。</li>
+      <li><b>L2 Trace Data Collection 設定視窗補齊</b>：(1.1)/(2.1) 改為先開啟 <code>S2F23 Define Trace</code> 視窗（影像01/02），可設定 TraceID（唯讀，1 或 2）、Data Sample Period（000001 hhmmss / 00000100 hhmmsscc）、Sample Limit (TOTSMP, 須 ≥ 600)、TRID/TOTSMP/REPGSZ 資料格式與 SVID 清單，按下 Start Trace 才會送出 S2F23；(4.1) 改為先開啟 <code>Enter SVID Sets &amp; Total Count for S1F3 Messaging</code> 視窗（影像03），可設定 Total Count (≥ 600)、SVID(Set 1) 20~45 個、SVID(Set 2) 50~100 個，按下 Set 後才會送出 S1F3。</li>
+      <li><b>L2 Trace Data Collection Section 3 排版對齊</b>：依影像05調整為單一藍灰按鈕 (3.1) 觸發；(3.1) 點擊時會同步送出 Set 1 與 Set 2 兩筆 S2F23，並一併點亮 (3.2) 燈號；(3.2)、(3.3)、(3.6) 改為純被動列（燈+多行文字），(3.4)/(3.5)/(3.7)/(3.8) 改為紅燈+唯讀數值欄位（不再顯示 (display) 按鈕），(3.5)/(3.8) 標示 Max.，比對影像顏色與配置一致。</li>
+      <li><b>L2 Trace Data Collection Section 4 排版對齊</b>：依影像06，(4.1)/(4.4)/(4.7) 為主送按鈕（藍灰），其餘 (4.2)(4.3)(4.5)(4.6)(4.8)~(4.11) 為非按鈕的事件列；所有列右側保留 <code>(display)</code> 顯示按鈕；(4.7) 由原本 S2F23 多行按鈕改為「多行按鈕 + (display)」組合，並於點擊時同時送出 Set 1 與 Set 2 兩筆 S1F3。</li>
+      <li><b>L2 Trace Data Collection Trace Count / Sample Period 對齊舊工具</b>：對照 <code>TestLog_Level2-TraceDataCollection_*.log</code>，舊工具的 Trace Count 是「收到對應 TRID 之 S6F1 的累計筆數」（log 顯示 <code>wait TRID:1 S6F1 [N / TOTSMP]</code> 一路遞增），Sample Period(Max) 則是「相鄰兩筆 S6F1 到達時間差的最大值（ms）」，皆為主機端被動統計，並非送 S1F3 查詢。本次新增頁面內的 <code>OnPrimaryMessageReceived</code> 訂閱 S6F1，解析第一個元素為 TRID（U1/U2/U4/U8/I1~I4 皆支援），依 TRID 累計次數並維護最大取樣間隔，更新 (1.3)/(1.4)/(2.4)/(2.5)/(3.4)/(3.5)/(3.7)/(3.8) 唯讀數值欄位；按下 (1.1)/(2.1)/(3.1) 送 S2F23 之前會先把對應 TRID 的計數歸零、欄位清空，與舊工具按下 OK 之後 <code>wait TRID:N S6F1 [1/TOTSMP]</code> 從頭計數的行為一致；STOP（(2.3) TOTSMP=0）不重置，保留最後統計值。</li>
+      <li><b>L2 Trace Data Collection (1.x)/(2.x) (display) 按鈕移除</b>：(1.3)/(1.4)/(2.4)/(2.5) 不再送出與本流程無關的 S1F3，改為與 Section 3 同款的紅燈 + 唯讀數值欄位，由 S6F1 即時更新顯示，避免按下後送出多餘且與舊工具不符的 S1F3。</li>
+      <li><b>自動送 ProceedWithCarrier</b>：抓到 CarrierIDRead 後立即以設備回報的 <code>CarrierID</code> 與 <code>PortID</code> 送出 <code>S3F17 ProceedWithCarrier</code>，對齊舊工具 LOG 的自動流程。</li>
+      <li><b>PJ1 Start 訊息修正</b>：<code>Start Process Job (PJ1)</code> 由原本 <code>S2F41 START</code> 改為舊工具 LOG 對應的 <code>S16F5 ProcessJobCommand START</code>。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>8. 行為差異 (階段 I — Before / After)</h2>
+    <table>
+      <thead><tr><th style="width:30%;">情境</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Multi Lot 分頁切換到 Normal 後 S6F11 進來</td>
+          <td>同一張 <code>KnownReportByCeid</code>，Normal 與 Multi Lot 的同名步驟（如 Carrier ID Read）會互相點亮對方的燈</td>
+          <td>各 scope 各自的對應表＋燈號字典，<span class="tag pass">完全獨立</span></td>
+        </tr>
+        <tr>
+          <td>Multi Lot 第一步</td>
+          <td>被誤改為灰色事件列，找不到主動觸發按鈕</td>
+          <td>還原為藍色按鈕（<code>AddReportStartButton</code>），但燈號仍須等對應 S6F11 才會變綠</td>
+        </tr>
+        <tr>
+          <td>Multi Lot PJ1／PJ2 列</td>
+          <td>沒有顯示 PJID／SlotID，無法分辨兩個 PJ</td>
+          <td>列右側顯示動態 PJID/SlotID hint，PJ Create 完成後即時刷新</td>
+        </tr>
+        <tr>
+          <td>Multi Lot Wafer Start／End 燈號</td>
+          <td>第一片就變綠，與 Normal 行為不同</td>
+          <td>Start 不累計、End 累計、全部 slot 完成才同時把兩盞燈轉綠</td>
+        </tr>
+        <tr>
+          <td>Multi Lot PJ1／PJ2 共用 CEID</td>
+          <td>第一次學到 PJ1 後就被永久綁住，PJ2 進來變成點亮 PJ1</td>
+          <td>共用 CEID 不再永久寫入 <code>MultiLotReportByCeid</code>，依目前 pending 動作即時對應</td>
+        </tr>
+        <tr>
+          <td>L2 Concurrent Run 畫面元素</td>
+          <td>含雙語圖例、輸入欄分散在區塊內 / 重複 PPID 列</td>
+          <td>移除圖例；輸入欄精準放在 Port1（Carrier+Port、PPID）／Port2（Carrier+Port）所屬位置；按鈕與事件列與參考影像一致</td>
+        </tr>
+        <tr>
+          <td>L2 Cancel/Stop/Abort Cancel Carrier 後續燈號</td>
+          <td>後續 ReadyToUnload／Unload Complete／ReadyToLoad 是灰色被動列，Host 即使收到 S6F11 也不會更新燈號</td>
+          <td>收到 S6F11 後依 CEID/事件名稱自動點亮對應列；舊工具等待 ReadyToUnload 的行為已對齊</td>
+        </tr>
+        <tr>
+          <td>L2 Cancel/Stop/Abort SlotMapFail 流程</td>
+          <td>CarrierIDRead 後未寫回頁面 CarrierID，CancelCarrier 視窗仍開預設值；Proceed With Carrier 與 SlotMap Report 兩列可能停在灰色</td>
+          <td>CarrierIDRead 會帶入 CarrierID/PortID；需要 SlotMap 的流程會自動送 ProceedWithCarrier 並點亮第 2 列，收到 SlotMap S6F11 後點亮第 3 列</td>
+        </tr>
+        <tr>
+          <td>L2 Cancel/Stop/Abort CarrierIDRead 抓取邏輯</td>
+          <td>L2 Cancel 頁有自己的 parser，存在 PortID fallback、Port 範圍、候選 CarrierID 選取等差異，與 L2 Concurrent/Multi Lot 的抓取規則不完全一致</td>
+          <td>改為共用 <code>SecsPayload.TryExtractCarrierReadInfo</code>；同樣解析 S6F11 CEID=1000 的 report tree、優先 values[1]、支援 LOPORT/LOADPORT 推 PortID、排除 CLOCK，不再有頁面特例</td>
+        </tr>
+        <tr>
+          <td>L2 Cancel/Stop/Abort 非當前流程事件誤點燈</td>
+          <td>只要收到 ReadyToLoad/ReadyToUnload 等 S6F11 就依事件名稱點燈，導致尚未送 CancelCarrier 前，第 5 列可能先變綠，而第一步 CarrierIDRead 仍因等不到 CEID=1000 變紅</td>
+          <td>新增 Cancel 流程階段控管；ReadyToUnload 必須在 CancelCarrier 後才點燈，UnloadComplete 必須在 ReadyToUnload 後才點燈，ReadyToLoad 必須在 UnloadComplete 後才點燈，不屬於目前階段的事件只寫入 log</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>2. 對參考資料的關鍵分析 (本次修改的依據)</h2>
+    <ul>
+      <li><b>TOOLID.xml</b> 是訊息字典 (2165 行)，每個 <code>&lt;Message&gt;</code> 帶 <code>Stream/Func/ExpectReply/AutoReply</code>，等同我們的 <code>SecsMessageTemplate</code>。</li>
+      <li><b>Excel 範本</b> (<code>tsmc_template_version1.xlsx</code> / <code>[NovEnd]CoWoS_..._CEIDVID_*.xlsx</code>) 提供 CEID/DVID 清單，會在 <i>Verify Each CEID/DVID</i> 階段「逐個」送 S2F37。</li>
+      <li><b>L1 Initial 標準步驟</b>（從 TestLog 證實）：DisableAll → Unlink → DeleteAll → VerifyEachCEID(N×) → VerifyEachDVID(N×) → Define → Link → Enable。</li>
+      <li><b>S6F11 結構</b>：<code>L[3]( U DataID, U CEID, L[reports]( L[2]( U RPTID, L[values] )* ) )</code>。<b>CEID 永遠是頂層 L[3] 的第二個 U 元素</b>，依「位置」取值最穩，不要依賴文字 regex。</li>
+      <li>參考程式對未知 CEID 會丟 <code>The given key 'X' was not present in the dictionary.</code>，但仍回 <code>S6F12 Ack 0x00</code>。</li>
+      <li><b>輸出結構</b>：<code>TestReport_yyyyMMdd_HHmm/{TestConfig,TestLog,TestResult,Reports_For_Buyer_User}/</code>，CSV index 採 <code>L_S_I</code> (例 <code>1_2_8</code>)。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>3. 本次修改 (階段 H) — 檔案層級</h2>
+
+    <h3>3.1 <span class="tag">新增</span> <span class="file">HostSimTester.App/Secs/SecsPayload.cs</span></h3>
+    <p>提供物件層級的 SECS payload 讀取（核心修正：CEID 解析不再靠 regex）。</p>
+    <ul>
+      <li><code>TryGetS6F11Ceid(SecsMessage, out uint)</code>：直接讀 <code>msg.SecsItem[1]</code>，支援 U1/U2/U4/U8/I1/I2/I4/I8。</li>
+      <li><code>TryGetS6F11FirstRptid(SecsMessage, out uint)</code>：讀 <code>msg.SecsItem[2][0][0]</code>。</li>
+      <li>內部 <code>TryReadUInt(Item, out uint)</code> 依 <code>SecsFormat</code> 安全分派 <code>FirstValue&lt;T&gt;()</code>。</li>
+    </ul>
+
+    <h3>3.2 <span class="tag">新增</span> <span class="file">HostSimTester.App/Excel/ExcelTemplateReader.cs</span></h3>
+    <p>使用 <code>ExcelDataReader</code> 解析 TSMC Define Event Report Excel 範本。</p>
+    <ul>
+      <li>掃描所有 sheet 前 20 列尋找 header（含 <code>CEID</code>/<code>DVID</code>/<code>RPTID</code> 字樣）。</li>
+      <li>從 header 之後逐列收集數值 ID（支援整數與 Excel 浮點如 <code>101001.0</code>）。</li>
+      <li>使用 <code>CodePagesEncodingProvider</code> 處理舊 .xls 編碼。</li>
+      <li>回傳 <code>TemplateContent { Ceids, Dvids, Rptids }</code>，並去重保序。</li>
+    </ul>
+
+    <h3>3.3 <span class="tag">修改</span> <span class="file">HostSimTester.App/HostSimTester.App.csproj</span></h3>
+    <pre><code>+ &lt;PackageReference Include="ExcelDataReader" Version="3.7.0" /&gt;
++ &lt;PackageReference Include="ExcelDataReader.DataSet" Version="3.7.0" /&gt;
++ &lt;PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" /&gt;</code></pre>
+
+    <h3>3.4 <span class="tag">修改</span> <span class="file">HostSimTester.App/AppSession.cs</span></h3>
+    <ul>
+      <li>新增 <code>L1InitialCeids / L1InitialDvids / L1InitialRptids</code> 三個唯讀清單。</li>
+      <li>新增 <code>SetL1InitialTemplateContent(...)</code> 由 Excel import 寫入。</li>
+      <li><code>Initialize()</code> 重設清單為空。</li>
+    </ul>
+
+    <h3>3.5 <span class="tag">修改</span> <span class="file">HostSimTester.App/Pages/L1InitialTestPage.cs</span></h3>
+    <ul>
+      <li><b>Import Excel File</b>：成功載入路徑後立即 <code>ExcelTemplateReader.Read(path)</code>，並寫回 <code>AppSession</code>；解析失敗只 warn、不擋流程。</li>
+      <li><b>Run Define Event Report Test</b>：8 步重排為參考程式順序（DisableAll → Unlink → DeleteAll → VerifyEachCEID(N×) → VerifyEachDVID(N×) → Define → Link → Enable），且 Step 4/5 改為「依 Excel CEID/DVID 逐筆送 S2F37」；若無 Excel 內容則 fallback 各送一發。</li>
+      <li><b>OnPrimaryMessageReceived</b>：改用 <code>SecsPayload.TryGetS6F11Ceid(...)</code> 物件層級取 CEID，再傳到 UI thread；保留 keyword fallback。</li>
+      <li><code>TryExtractCeid</code> regex fallback 一併放寬到 U1/U2/U4/U8。</li>
+    </ul>
+
+    <h3>3.6 <span class="tag">修改</span> <span class="file">HostSimTester.App/Pages/L1NormalScenarioPage.cs</span></h3>
+    <ul>
+      <li><b>HandleS6F11Report</b>：第一順位用 <code>SecsPayload.TryGetS6F11Ceid(wrapper.PrimaryMessage, ...)</code>，失敗才退回原本的 regex；解掉「CEID parse failed」的長期老問題。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>4. 行為差異 (Before / After)</h2>
+    <table>
+      <thead><tr><th style="width:30%;">情境</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>S6F11 收到 <code>L[3](U4 9, U4 253, ...)</code></td>
+          <td>regex 找 "CEID" 字串失敗 → 顯示 <span class="tag warn">CEID parse failed</span></td>
+          <td>物件層級直接取 <code>SecsItem[1] = 253</code> → 正確判定 CEID=253</td>
+        </tr>
+        <tr>
+          <td>L1 Initial 「Run Define Event Report」</td>
+          <td>固定 8 發、CEID 寫死 1001/101001..</td>
+          <td>對齊參考程式順序；Verify 階段依 Excel 清單逐筆送 (N 發)</td>
+        </tr>
+        <tr>
+          <td>Import Excel 後</td>
+          <td>只記住路徑，內容不解析</td>
+          <td>立即 parse，CEIDs/DVIDs/RPTIDs 進入 AppSession 提供下游使用</td>
+        </tr>
+        <tr>
+          <td>L1 Initial 未完成切其他 Tab</td>
+          <td>(階段 G) 已阻擋 ✓</td>
+          <td>維持阻擋；「完成」需 Excel imported + Define Event 跑完</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>5. 後續可繼續對齊的項目</h2>
+    <ul>
+      <li>把 TOOLID.xml 的 <code>ExpectReply</code> / <code>AutoReply</code> 規則納入 <code>SecsTemplateRegistry</code>，讓我們也能自動回特定 secondary。</li>
+      <li>將 L1 Normal 的「2) Carrier Placement (Load Complete)」之類事件直接綁到 Excel 取得的 CEID（替代目前 keyword 比對）。</li>
+      <li>產出測試結果輸出包：<code>TestReport_yyyyMMdd_HHmm/{TestConfig,TestLog,TestResult,Reports_For_Buyer_User}/</code> + <code>SecsIIReport.csv</code>（欄位 <code>Tester_Index = L_S_I</code>）。</li>
+      <li>將 13 國語系資源檔抽出，避免 UI 字串硬編碼。</li>
+      <li>導入 <code>Mapping_Table_Tester_E9_V8.xlsx</code> 做 REQ ID 對照（如 <code>REQ 5.17.18.1</code>）。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>9. 編譯結果</h2>
+    <pre><code>dotnet build HostSimTester.App/HostSimTester.App.csproj -c Debug --no-restore -v q
+  HostSimTester.App -> bin\Debug\net8.0-windows\HostSimTester.App.dll
+  Build succeeded.（僅有 1 項先前既存警告 S3F17ProceedDialog.cs(197,13): CS8602）</code></pre>
+    <p class="meta">階段 I 紀錄產生時間：2026-04-29</p>
+  </div>
+
+</main>
+</body>
+</html>
