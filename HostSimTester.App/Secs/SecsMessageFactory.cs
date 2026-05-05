@@ -171,10 +171,10 @@ public static class SecsMessageFactory
 
     public static Item S16F15ProcessJobCreate(string processJobId, string recipeId, string carrierId)
     {
-        return S16F15ProcessJobCreate(processJobId, recipeId, carrierId, null);
+        return S16F15ProcessJobCreate(processJobId, recipeId, carrierId, null, autoStart: true);
     }
 
-    public static Item S16F15ProcessJobCreate(string processJobId, string recipeId, string carrierId, IEnumerable<string>? slotIds)
+    public static Item S16F15ProcessJobCreate(string processJobId, string recipeId, string carrierId, IEnumerable<string>? slotIds, bool autoStart = true)
     {
         return L(
             U4([1]),
@@ -190,7 +190,7 @@ public static class SecsMessageFactory
                         U1([1]),
                         A(recipeId),
                         L()),
-                    Boolean([true]),
+                    Boolean([autoStart]),
                     L())));
     }
 

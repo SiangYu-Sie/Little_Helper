@@ -24,7 +24,6 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
     private readonly TextBox _txtCarrierId2;
     private readonly NumericUpDown _nudPortId1;
     private readonly NumericUpDown _nudPortId2;
-    private readonly TextBox _txtRecipeId;
     private readonly Dictionary<string, Panel> _eventLamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _armedAutoPassEvents = new(StringComparer.OrdinalIgnoreCase);
     private string _lastCarrierId1 = string.Empty;
@@ -37,6 +36,10 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
     private IReadOnlyList<string> _lastContentMapSlotIds2 = Array.Empty<string>();
     private string _lastPj1Id = "PJ001";
     private string _lastPj2Id = "PJ002";
+    private string _lastCjId1 = "CJ001";
+    private string _lastCjId2 = "CJ002";
+    private string _lastRecipeId1 = "Trim_2";
+    private string _lastRecipeId2 = "Trim_2";
     private int _jobProcessingIndex;
 
     public L2ConcurrentRunPage(Secs.SecsConnection connection)
@@ -46,7 +49,6 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
         _nudPortId1 = new NumericUpDown { Minimum = 1, Maximum = 4, Value = 1, Width = 50 };
         _txtCarrierId2 = new TextBox { Text = "CARR_P2_001", Width = 110 };
         _nudPortId2 = new NumericUpDown { Minimum = 1, Maximum = 4, Value = 2, Width = 50 };
-        _txtRecipeId = new TextBox { Text = "Trim_2", Width = 88 };
 
         Connection.PrimaryMessageReceived += OnPrimaryMessageReceived;
         Disposed += (_, _) => Connection.PrimaryMessageReceived -= OnPrimaryMessageReceived;
@@ -270,19 +272,21 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
             async () =>
             {
                 using var prepDlg = new Dialogs.PpSelectStartPjCjDialog(
-                    _txtCarrierId1.Text.Trim(), _lastPj1Id, _txtRecipeId.Text.Trim(), "CJ001", _lastContentMapSlotIds1);
+                    _txtCarrierId1.Text.Trim(), _lastPj1Id, _lastRecipeId1, _lastCjId1, _lastContentMapSlotIds1);
                 if (prepDlg.ShowDialog(FindForm()) != DialogResult.OK) return;
                 _txtCarrierId1.Text = prepDlg.CarrierId;
                 var pjId = string.IsNullOrWhiteSpace(prepDlg.ProcessJobId) ? _lastPj1Id : prepDlg.ProcessJobId;
-                var ppid = string.IsNullOrWhiteSpace(prepDlg.Ppid) ? _txtRecipeId.Text.Trim() : prepDlg.Ppid;
-                var cjId = string.IsNullOrWhiteSpace(prepDlg.ControlJobId) ? "CJ001" : prepDlg.ControlJobId;
+                var ppid = string.IsNullOrWhiteSpace(prepDlg.Ppid) ? _lastRecipeId1 : prepDlg.Ppid;
+                var cjId = string.IsNullOrWhiteSpace(prepDlg.ControlJobId) ? _lastCjId1 : prepDlg.ControlJobId;
                 var slotIds = prepDlg.GetSlotIds();
                 _lastPj1Id = pjId;
-                _txtRecipeId.Text = ppid;
+                _lastCjId1 = cjId;
+                _lastRecipeId1 = ppid;
+                AppendResult($"[INFO] Prepare PJ/CJ Port1: CarrierID={prepDlg.CarrierId}, PJID={pjId}, CJID={cjId}, RecipeID={ppid}, AutoStart=False, SlotIDs=[{string.Join(", ", slotIds)}]");
                 ArmAutoPass("ControlJob 1 Start");
                 ArmAutoPass("Process Job 1 Waiting For Start Event");
                 await SendAsync("L2Concurrent_S16F15_CreatePJ1", 16, 15,
-                    Secs.SecsMessageFactory.S16F15ProcessJobCreate(pjId, ppid, prepDlg.CarrierId, slotIds)).ConfigureAwait(true);
+                    Secs.SecsMessageFactory.S16F15ProcessJobCreate(pjId, ppid, prepDlg.CarrierId, slotIds, autoStart: false)).ConfigureAwait(true);
                 var processOrderMgmt = byte.TryParse(prepDlg.ProcessOrderMgmt, out var pom) ? pom : (byte)2;
                 await SendAsync("L2Concurrent_S14F9_CreateCJ1", 14, 9,
                     Secs.SecsMessageFactory.S14F9ControlJobCreate(cjId, prepDlg.CarrierId, [pjId], processOrderMgmt)).ConfigureAwait(true);
@@ -334,20 +338,22 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
             async () =>
             {
                 using var prepDlg = new Dialogs.PpSelectStartPjCjDialog(
-                    _txtCarrierId2.Text.Trim(), _lastPj2Id, _txtRecipeId.Text.Trim(), "CJ002", _lastContentMapSlotIds2);
+                    _txtCarrierId2.Text.Trim(), _lastPj2Id, _lastRecipeId2, _lastCjId2, _lastContentMapSlotIds2);
                 if (prepDlg.ShowDialog(FindForm()) != DialogResult.OK) return;
                 _txtCarrierId2.Text = prepDlg.CarrierId;
                 var pjId = string.IsNullOrWhiteSpace(prepDlg.ProcessJobId) ? _lastPj2Id : prepDlg.ProcessJobId;
-                var ppid = string.IsNullOrWhiteSpace(prepDlg.Ppid) ? _txtRecipeId.Text.Trim() : prepDlg.Ppid;
-                var cjId = string.IsNullOrWhiteSpace(prepDlg.ControlJobId) ? "CJ002" : prepDlg.ControlJobId;
+                var ppid = string.IsNullOrWhiteSpace(prepDlg.Ppid) ? _lastRecipeId2 : prepDlg.Ppid;
+                var cjId = string.IsNullOrWhiteSpace(prepDlg.ControlJobId) ? _lastCjId2 : prepDlg.ControlJobId;
                 var slotIds = prepDlg.GetSlotIds();
                 _lastPj2Id = pjId;
-                _txtRecipeId.Text = ppid;
+                _lastCjId2 = cjId;
+                _lastRecipeId2 = ppid;
+                AppendResult($"[INFO] Prepare PJ/CJ Port2: CarrierID={prepDlg.CarrierId}, PJID={pjId}, CJID={cjId}, RecipeID={ppid}, AutoStart=True, SlotIDs=[{string.Join(", ", slotIds)}]");
                 ArmAutoPass("ControlJob 2 Start");
                 ArmAutoPass("ProcessJob 2 Start (PJ Auto Start)");
                 ArmJobProcessingEvents();
                 await SendAsync("L2Concurrent_S16F15_CreatePJ2", 16, 15,
-                    Secs.SecsMessageFactory.S16F15ProcessJobCreate(pjId, ppid, prepDlg.CarrierId, slotIds)).ConfigureAwait(true);
+                    Secs.SecsMessageFactory.S16F15ProcessJobCreate(pjId, ppid, prepDlg.CarrierId, slotIds, autoStart: true)).ConfigureAwait(true);
                 var processOrderMgmt = byte.TryParse(prepDlg.ProcessOrderMgmt, out var pom) ? pom : (byte)2;
                 await SendAsync("L2Concurrent_S14F9_CreateCJ2", 14, 9,
                     Secs.SecsMessageFactory.S14F9ControlJobCreate(cjId, prepDlg.CarrierId, [pjId], processOrderMgmt)).ConfigureAwait(true);
@@ -368,6 +374,8 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
             () => WaitPrimaryAsync("L2Concurrent_Wait_S6F11_CJ1Start", 6, 11, 30));
         AddReportRow(jobStartBody, "Process Job 1 Waiting For Start Event",
             () => WaitPrimaryAsync("L2Concurrent_Wait_S6F11_PJ1WaitStart", 6, 11, 30));
+        AddReportRow(jobStartBody, "ControlJob 2 Queued",
+            () => WaitPrimaryAsync("L2Concurrent_Wait_S6F11_CJ2Queued", 6, 11, 30));
         AddReportRow(jobStartBody, "ControlJob 2 Start",
             () => WaitPrimaryAsync("L2Concurrent_Wait_S6F11_CJ2Start", 6, 11, 30));
         AddReportRow(jobStartBody, "ProcessJob 2 Start (PJ Auto Start)",
@@ -626,6 +634,11 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
             return;
         }
 
+        if (TryDescribeJobTransition(upper, ceid, out var jobTransition))
+        {
+            AppendResult($"[INFO] {jobTransition}");
+        }
+
         if (TryResolveJobStartAction(upper, out var jobStartAction))
         {
             MarkL2EventPass(jobStartAction, $"S6F11 CEID={ceid}");
@@ -638,9 +651,123 @@ public sealed class L2ConcurrentRunPage : BaseTestPage
         }
     }
 
+    private bool TryDescribeJobTransition(string upper, uint ceid, out string description)
+    {
+        description = string.Empty;
+
+        var isJobRelated = upper.Contains("CJ", StringComparison.Ordinal) ||
+            upper.Contains("CONTROLJOB", StringComparison.Ordinal) ||
+            upper.Contains("PJ", StringComparison.Ordinal) ||
+            upper.Contains("PRJOB", StringComparison.Ordinal) ||
+            upper.Contains("PROCESSJOB", StringComparison.Ordinal);
+        if (!isJobRelated)
+        {
+            return false;
+        }
+
+        var portText = ResolveJobPortText(upper);
+        var cjId = ResolveKnownIdentifier(upper, _lastCjId1, _lastCjId2);
+        var pjId = ResolveKnownIdentifier(upper, _lastPj1Id, _lastPj2Id);
+        var status = ResolveJobStatusText(upper);
+        description = $"Job event: CEID={ceid}, Port={portText}, CJID={cjId}, PJID={pjId}, Status={status}";
+        return true;
+    }
+
+    private string ResolveJobPortText(string upper)
+    {
+        if (upper.Contains("LOADPORT1", StringComparison.Ordinal) || upper.Contains("PORTID */\n                    <U1 [1] 1", StringComparison.Ordinal))
+        {
+            return "1";
+        }
+
+        if (upper.Contains("LOADPORT2", StringComparison.Ordinal) || upper.Contains("PORTID */\n                    <U1 [1] 2", StringComparison.Ordinal))
+        {
+            return "2";
+        }
+
+        if (upper.Contains(_lastPj1Id.ToUpperInvariant(), StringComparison.Ordinal) || upper.Contains(_lastCjId1.ToUpperInvariant(), StringComparison.Ordinal))
+        {
+            return "1";
+        }
+
+        if (upper.Contains(_lastPj2Id.ToUpperInvariant(), StringComparison.Ordinal) || upper.Contains(_lastCjId2.ToUpperInvariant(), StringComparison.Ordinal))
+        {
+            return "2";
+        }
+
+        return "?";
+    }
+
+    private static string ResolveKnownIdentifier(string upper, string firstId, string secondId)
+    {
+        if (!string.IsNullOrWhiteSpace(firstId) && upper.Contains(firstId.ToUpperInvariant(), StringComparison.Ordinal))
+        {
+            return firstId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(secondId) && upper.Contains(secondId.ToUpperInvariant(), StringComparison.Ordinal))
+        {
+            return secondId;
+        }
+
+        return "?";
+    }
+
+    private static string ResolveJobStatusText(string upper)
+    {
+        if (upper.Contains("WAIT", StringComparison.Ordinal))
+        {
+            return "WaitingForStart";
+        }
+
+        if (upper.Contains("QUEUED", StringComparison.Ordinal))
+        {
+            return "Queued";
+        }
+
+        if (upper.Contains("MANUAL", StringComparison.Ordinal) && upper.Contains("START", StringComparison.Ordinal))
+        {
+            return "ManualStart";
+        }
+
+        if (upper.Contains("AUTO", StringComparison.Ordinal) && upper.Contains("START", StringComparison.Ordinal))
+        {
+            return "AutoStart";
+        }
+
+        if (upper.Contains("SETTINGUP", StringComparison.Ordinal) || upper.Contains("SETTING UP", StringComparison.Ordinal))
+        {
+            return "SettingUp";
+        }
+
+        if (upper.Contains("POOLED", StringComparison.Ordinal))
+        {
+            return "Pooled";
+        }
+
+        if (upper.Contains("START", StringComparison.Ordinal))
+        {
+            return "Start";
+        }
+
+        if (upper.Contains("END", StringComparison.Ordinal) || upper.Contains("COMPLETE", StringComparison.Ordinal))
+        {
+            return "Complete";
+        }
+
+        return "Unknown";
+    }
+
     private bool TryResolveJobStartAction(string upper, out string actionText)
     {
         actionText = string.Empty;
+
+        if (upper.Contains("QUEUED", StringComparison.Ordinal) &&
+            (upper.Contains("CJ2", StringComparison.Ordinal) || upper.Contains("CONTROLJOB 2", StringComparison.Ordinal) || upper.Contains("CONTROLJOB2", StringComparison.Ordinal)))
+        {
+            actionText = "ControlJob 2 Queued";
+            return true;
+        }
 
         if (upper.Contains("CJ1", StringComparison.Ordinal) || upper.Contains("CONTROLJOB 1", StringComparison.Ordinal) || upper.Contains("CONTROLJOB1", StringComparison.Ordinal))
         {
