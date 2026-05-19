@@ -140,8 +140,65 @@
         <tr><td>階段 H</td><td>對齊參考程式</td><td>讀完 <code>參考資料/ToolSoftwareTester1.0.0.0</code>（TOOLID.xml、Test logs、Result CSVs）後完成 4 項對齊修改，詳見下節。</td></tr>
         <tr><td>階段 I <span class="tag pass">本次</span></td><td>L1 Multi Lot 燈號分離 + L2 Concurrent Run UI 審視</td><td>L1 Multi Lot 與 Normal 燈號完全獨立、新增 PJID/SlotID 進度提示、PJ1/PJ2 共用 CEID 釐清；L2 Concurrent Run 對齊參考影像（按鈕／事件列、輸入欄位置），並依舊工具 LOG 修正 CarrierIDRead 自動抓值、快取、燈號同步、ProceedWithCarrier、PJ1 Start S16F5。</td></tr>
         <tr><td>階段 J <span class="tag pass">本次補充</span></td><td>L2 Concurrent Run 測試方式確認</td><td>依舊工具 <code>TestLog_Level2-ConcurrentRun_20260309_2150.log</code>、目前 <code>L2ConcurrentRunPage</code> 流程，以及 E87/E90/E94 與 CEID/VID Excel 參考資料，確認 Loading &amp; Job Start 與 Job Processing 的測試方式：LOADPORT1/PJ1 為 Manual Start，LOADPORT2/PJ2 為 Auto Start；Host command 與等待 S6F11 事件列需分開判讀。</td></tr>
+        <tr><td>階段 K <span class="tag pass">本次</span></td><td>舊成功 LOG 對齊 + S6F11 ID 防誤判</td><td>依舊工具 S14F9/S14F10 成功案例修正 CJ 建立格式：S14F9 的 ProcessingCtrlSpec 不再攜帶 Slot List，ProcessOrderMgmt 預設回到 2，StartMethod 維持 True；同時補上 PJ/CJ 事件點燈前必須比對本次 PJID/CJID，避免設備殘留 CJ001/PJ001 事件誤判。</td></tr>
+        <tr><td>階段 K-2 <span class="tag pass">本次修正</span></td><td>L1 Normal PJ/CJ ID 不再自動改名</td><td>針對 2026-05-19 15:53:59 的 CJ 建立失敗，確認畫面顯示 <code>PJ001/CJ001</code>，但實際送出 <code>PJ0519155358004/CJ0519155358317</code>；現已移除預設 ID 的時間戳自動改名，讓 S16F15/S14F9 送出的 ID 與畫面及舊工具成功 LOG 一致。</td></tr>
+        <tr><td>階段 K-3 <span class="tag pass">本次修正</span></td><td>L1 CJ 建立固定舊成功組合</td><td>依設備端 LOG（收到 <code>ProcessOrderMgmt=1 / StartMethod=False</code>）確認 fallback 仍可能送出非目標組合；現已將 L1 Normal 與 Multi-Lot 的 CJ 建立固定為 <code>ProcessOrderMgmt=2</code>、<code>StartMethod=True</code>，移除 1/False 類型的重試組合，避免設備再次以 create object fail 拒絕。</td></tr>
+        <tr><td>階段 K-4 <span class="tag pass">本次修正</span></td><td>新增 TEST/CONTROLJOB 相容 CJ fallback</td><td>依外部成功 LOG（<code>TEST/CONTROLJOB</code>、<code>PROCESSORDERMGMT=0x03</code>、<code>STARTMETHOD=False</code>、含 <code>DATACOLLECTIONPLAN</code>）補上第二套 S14F9 payload 形狀：若標準 <code>Equipment/ControlJob</code> 建立失敗，會自動改送 TEST Domain 相容格式，提升不同設備實作的 CJ 建立成功率。</td></tr>
+        <tr><td>階段 K-5 <span class="tag pass">本次修正</span></td><td>Compat 路徑補送 PJ START，解除 CEID=96 卡住</td><td>最新 LOG 顯示 Compat TEST 路徑下 <code>S16F28=True</code>、CJ 已進到 <code>CEID=96</code> 但流程未前進到量測事件；現於 Compat 路徑的 <code>S16F27 START</code> 後，對關聯 PJ 自動補送 <code>S16F5 START</code>，強制推進 PJ 狀態進入量測流程。</td></tr>
+        <tr><td>階段 K-6 <span class="tag pass">本次修正</span></td><td>回退 Compat 強制 S16F5 + 修正 CEID96 CarrierID 誤判</td><td>實測顯示 Compat 路徑補送 <code>S16F5 START</code> 會收到 <code>S16F6: Target PJ is not running</code>；因此改回僅送 <code>S16F27 START</code>。同時修正 CarrierID 萃取：Job lifecycle CEID（如 91/93/96/97/41/42/44/46/47）不再走 generic/supplement 萃取，並排除 <code>PJ*</code>/<code>CJ*</code> 被當成 CarrierID，避免畫面 CarrierID 被誤改成 <code>CJ001</code>。</td></tr>
+        <tr><td>階段 K-7 <span class="tag pass">本次修正</span></td><td>CEID 93/96 對應 L1 啟動步驟</td><td>依最新設備回報（Compat 成功後固定出現 <code>CEID=93</code>、<code>CEID=96</code>）補上 L1 Normal CEID 對應：<code>93 → Control Job Start Event</code>、<code>96 → Process Job Start Event</code>，避免流程卡在「已收到設備狀態但未點亮/未推進」的狀態。</td></tr>
+        <tr><td>階段 K-8 <span class="tag pass">本次修正</span></td><td>Compat 前置補送 TEST/PROCESSJOB</td><td>比對外部 Host 成功 LOG 後發現其順序為：<code>CreateProcessJob(TEST/PROCESSJOB)</code> → <code>CreateControlJob(TEST/CONTROLJOB)</code> → <code>S16F27 CJSTART</code>。現於 L1 Normal 的 Compat fallback 中，在送 TEST/CONTROLJOB 前先補送 TEST/PROCESSJOB（含 RECID、PRMTLNAMELIST 與 slot B-list），以貼齊設備可成功路徑。</td></tr>
+        <tr><td>階段 K-9 <span class="tag pass">本次修正</span></td><td>CJ Start 追蹤前移，避免漏接 CEID 93/96</td><td>從最新 log 發現 <code>CEID=93/96</code> 常在 CJ 建立/啟動期間立即回報，原本在 Create 結束後才 <code>TrackExpectedReport("11) Control Job Start Event")</code>，會導致事件先到先被判定 <code>step not started</code>。已改為「送 CJ create/start 前先 arm 11」，避免啟動事件漏接而卡住量測前置鏈。</td></tr>
+        <tr><td>階段 K-10 <span class="tag pass">本次修正</span></td><td>CEID=96 允許以 CJID 驗證點亮 12</td><td>現場設備的 <code>CEID=96</code>（Process Job Start）回報常僅帶 <code>CJID</code>，未帶 <code>PJID</code>。原本 12 步驟僅接受 PJID，會被判定 <code>payload does not contain expected ID 'PJ001'</code> 而不點燈。已在 Normal 流程放寬：當 <code>CEID=96</code> 且 action 為 <code>12) Process Job Start Event</code> 時，若 payload 含當前 CJID 視為有效。</td></tr>
+        <tr><td>階段 K-11 <span class="tag pass">本次修正</span></td><td>CEID=96 後加量測 watchdog 補送 S16F5 START</td><td>因現場仍出現「11/12 已亮但 CEID=96 後無量測事件」情況，Normal 流程新增一次性 watchdog：<code>12) Process Job Start Event</code> 通過後延遲 1.5 秒，若 <code>13) Wafer Process Start Event</code> 仍未點亮，則補送 <code>S16F5 START</code>（允許 NAK、不拋錯中斷），嘗試把流程從 PJ Start 推進到 wafer measurement 事件鏈。</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>10. 本次修改 (階段 K) — 舊成功 LOG 對齊與防誤判</h2>
+
+    <h3>10.1 <span class="tag">修改</span> <span class="file">HostSimTester.App/Pages/L1NormalScenarioPage.cs</span></h3>
+    <ul>
+      <li><b>S14F9 ControlJobCreate 對齊舊工具成功格式</b>：L1 Normal 建立 CJ 時不再把 SlotID List 帶入 <code>S14F9 ProcessingCtrlSpec</code>；SlotID 仍保留在 <code>S16F15 ProcessJobCreate</code> 的 Material List。</li>
+      <li><b>ProcessOrderMgmt 預設回復為 2</b>：依舊工具成功 LOG（<code>ProcessOrderMgmt=2</code>、<code>StartMethod=True</code>）調整 L1 Normal 與 Multi-Lot CJ 建立流程。</li>
+      <li><b>CJ 建立重試順序修正</b>：第一筆優先送出舊成功組合 <code>ProcessOrderMgmt=2</code>、<code>StartMethod=True</code>，後續才嘗試其他備援組合。</li>
+      <li><b>Multi-Lot CJ 建立一致化</b>：Multi-Lot 的 <code>S14F9 ProcessingCtrlSpec</code> 也改為 PJID + 空 Slot List，避免與舊成功流程不一致。</li>
+      <li><b>本次 PJID/CJID 狀態保存</b>：送出 <code>S16F15</code> / <code>S14F9</code> 前記錄本次使用的 PJID/CJID，供後續 S6F11 驗證。</li>
+      <li><b>移除預設 ID 自動改名</b>：L1 Normal 第 10 步不再將畫面上的 <code>PJ001</code> / <code>CJ001</code> 自動改成時間戳 ID；舊工具成功 LOG 是直接送 <code>PJ001</code> / <code>CJ001</code>，本次已恢復一致。</li>
+      <li><b>CJ 重試組合收斂</b>：L1 Normal 與 Multi-Lot 的 <code>BuildControlJobCreateAttempts</code> 僅保留舊成功組合 <code>(2, True)</code>，不再送出 <code>ProcessOrderMgmt=1</code> 或 <code>StartMethod=False</code> 的變形封包。</li>
+      <li><b>新增 TEST Domain 相容 fallback</b>：若標準 E94 <code>Equipment/ControlJob</code> 建立失敗，會再嘗試送出與成功 LOG 對齊的 <code>TEST/CONTROLJOB</code> 形狀（<code>PROCESSINGCTRLSPEC</code> 巢狀型別、<code>DATACOLLECTIONPLAN=DataPlanTest</code>、<code>PROCESSORDERMGMT=B(0x03)</code>、<code>STARTMETHOD=False</code>）。</li>
+      <li><b>Compat 路徑補送 PJ START</b>：若走 TEST Domain fallback，於 <code>S16F27 START</code> 成功後，會對關聯 PJ 追加送出 <code>S16F5 START</code>；若設備回覆不接受則記錄 WARN 但不中斷流程。</li>
+      <li><b>K-6 調整</b>：移除 Compat 路徑對 <code>S16F5 START</code> 的強制補送（避免 <code>Target PJ is not running</code>），改由設備自有節奏推進；並限制 CarrierID generic/supplement 萃取不作用於 Job lifecycle CEID，且將 <code>PJ*</code>/<code>CJ*</code> 視為非 CarrierID。</li>
+      <li><b>CEID 93/96 映射補齊</b>：L1 Normal 新增 <code>93</code> 與 <code>96</code> 的 known CEID 對應，讓 Compat 路徑的 CJ/PJ 狀態事件可直接觸發對應步驟推進。</li>
+      <li><b>K-8 補齊 TEST/PROCESSJOB</b>：Compat fallback 新增 <code>S14F9ProcessJobCreateTestDomain</code>，在送 TEST/CONTROLJOB 前先送 TEST/PROCESSJOB；slot list 依外部成功 Host 形狀改為 Binary slot item（<code>B[1]</code>）。</li>
+      <li><b>K-9 啟動事件漏接修正</b>：L1 Normal 將 <code>11) Control Job Start Event</code> 的 tracking 前移到送 CJ create/start 前，避免設備回報過快造成 <code>CEID=93/96</code> 被判定為未啟動步驟。</li>
+      <li><b>K-10 CEID=96 驗證放寬</b>：Normal 流程的 <code>12) Process Job Start Event</code> 在 <code>CEID=96</code> 場景允許以當前 CJID 通過檢核，處理設備只回 CJID 的回報形狀。</li>
+      <li><b>K-11 量測 watchdog</b>：Normal 流程在 12 通過後啟動一次性延遲檢查，若 13 未亮則補送 <code>S16F5 START</code>，避免流程卡在 CEID=96 後不進 wafer 事件。</li>
+      <li><b>S6F11 點燈前 ID 檢核</b>：Control Job / Process Job Start 或 Complete 事件必須在 payload 中包含本次 PJID/CJID 才能點燈；若收到設備殘留的 <code>CJ001</code> 或其他舊事件，只寫入 mapping verdict，不會點亮當前測試步驟。</li>
+      <li><b>Pending CEID 學習防誤判</b>：CEID 動態學習前同樣套用本次 PJID/CJID 檢核，避免把舊事件學成目前流程的正確事件。</li>
+    </ul>
+
+    <h3>10.2 <span class="tag">修改</span> <span class="file">HostSimTester.App/Secs/SecsMessageFactory.cs</span></h3>
+    <ul>
+      <li><b>S14F9 預設值對齊舊成功案例</b>：<code>S14F9ControlJobCreate</code> 的 <code>processOrderMgmt</code> 預設值改回 <code>2</code>，<code>startMethod</code> 維持 <code>true</code>。</li>
+      <li><b>保留 StartMethod 可調</b>：仍保留 <code>startMethod</code> 參數，方便設備拒絕時做備援測試，但正常第一筆會先走舊成功格式。</li>
+    </ul>
+
+    <h3>10.3 <span class="tag">修改</span> <span class="file">HostSimTester.App/Dialogs/PpSelectStartPjCjDialog.cs</span> / <span class="file">HostSimTester.App/Dialogs/ControlJobCreateDialog.cs</span></h3>
+    <ul>
+      <li><b>UI 預設 ProcessOrderMgmt 回到 2</b>：PJ/CJ 建立共用視窗與獨立 CJ 建立視窗的 ProcessOrderMgmt 預設值改為 <code>2</code>，與舊工具成功 LOG 一致。</li>
+    </ul>
+
+    <h3>10.4 <span class="tag">修改</span> <span class="file">HostSimTester.App/Pages/L2RecipePage.cs</span></h3>
+    <ul>
+      <li><b>Recipe RAW echo 記錄補強</b>：Formatted Recipe Download 使用 cached RAW_GROUPS template 或 legacy template 時，結果視窗會明確顯示格式與群組/PPARM 數量，方便後續對照舊成功 LOG。</li>
+    </ul>
+
+    <h3>10.5 <span class="tag">紀錄</span> <span class="file">/memories/repo/secs-payload-shape.md</span></h3>
+    <ul>
+      <li>新增 TrimGap CJ 成功 S14F9 payload shape 備忘：<code>ProcessingCtrlSpec = L(A PJID, L[0], L[0])</code>，<code>ProcessOrderMgmt=2</code>，<code>StartMethod=True</code>。</li>
+    </ul>
   </div>
 
   <div class="card">
@@ -386,10 +443,12 @@
 
   <div class="card">
     <h2>9. 編譯結果</h2>
-    <pre><code>dotnet build HostSimTester.App/HostSimTester.App.csproj -c Debug --no-restore -v q
-  HostSimTester.App -> bin\Debug\net8.0-windows\HostSimTester.App.dll
-  Build succeeded.（僅有 1 項先前既存警告 S3F17ProceedDialog.cs(197,13): CS8602）</code></pre>
-    <p class="meta">階段 I 紀錄產生時間：2026-04-29</p>
+    <pre><code>Stop-Process -Name "HostSimTester.App" -Force -ErrorAction SilentlyContinue
+dotnet build HostSimTester.slnx -c Debug
+
+Build succeeded.
+Warning: HostSimTester.App\Dialogs\S3F17ProceedDialog.cs(198,13): CS8602（既有 nullable warning）</code></pre>
+  <p class="meta">階段 K-11 紀錄更新時間：2026-05-19</p>
   </div>
 
 </main>

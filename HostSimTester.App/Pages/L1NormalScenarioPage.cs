@@ -16,6 +16,8 @@ public sealed class L1NormalScenarioPage : BaseTestPage
         // Observed from user equipment: S6F11 CEID=1006 is Auto Clamp Event.
         [1006] = "3) Auto Clamp Event",
         [1000] = "4) Auto Read Carrier ID",
+        [93] = "11) Control Job Start Event",
+        [96] = "12) Process Job Start Event",
         [41] = "12) Process Job Start Event",
         [5799] = "13) Wafer Process Start Event",
         [5790] = "14) Wafer Process End Event",
@@ -99,6 +101,8 @@ public sealed class L1NormalScenarioPage : BaseTestPage
     private IReadOnlyList<string> _multiLotPj2SlotIds = Array.Empty<string>();
     private string _multiLotPj1Id = "PJ1";
     private string _multiLotPj2Id = "PJ2";
+    private string _currentNormalProcessJobId = string.Empty;
+    private string _currentNormalControlJobId = string.Empty;
     private ReportScope _activeReportScope = ReportScope.Normal;
     private readonly Dictionary<ReportScope, string> _pendingReportActionByScope = new();
     private DateTime _pendingReportActionAt;
@@ -108,6 +112,7 @@ public sealed class L1NormalScenarioPage : BaseTestPage
     private int _multiLotExpectedWaferSlotCount = 1;
     private int _multiLotWaferEndCount;
     private bool _carrierRemovalEventsEnabled;
+    private bool _normalMeasurementKickSent;
 
     private string? PendingReportAction
     {
@@ -453,28 +458,38 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                 await SendAsync("L1Normal_S3F17_ProceedWithCarrier_Process", 3, 17, payload).ConfigureAwait(true);
 
                 // E40: Send S16F15 PRJobMultiCreate if PJ info is provided
-                var pjId = string.IsNullOrWhiteSpace(prepDlg.ProcessJobId) ? _txtProcessJobId.Text.Trim() : prepDlg.ProcessJobId;
+                var pjIdSource = string.IsNullOrWhiteSpace(prepDlg.ProcessJobId) ? _txtProcessJobId.Text.Trim() : prepDlg.ProcessJobId.Trim();
+                var pjId = pjIdSource;
                 var ppid = string.IsNullOrWhiteSpace(prepDlg.Ppid) ? _txtRecipeId.Text.Trim() : prepDlg.Ppid;
                 var carrierId2 = prepDlg.CarrierId;
                 if (!string.IsNullOrWhiteSpace(pjId))
                 {
+                    _normalMeasurementKickSent = false;
+                    _currentNormalProcessJobId = pjId;
                     await SendAsync("L1Normal_S16F15_ProcessJobCreate", 16, 15,
                         Secs.SecsMessageFactory.S16F15ProcessJobCreate(pjId, ppid, carrierId2, slotIds)).ConfigureAwait(true);
                 }
 
                 // E94: Send S14F9 ControlJobCreate if CJ info is provided
-                var cjId = string.IsNullOrWhiteSpace(prepDlg.ControlJobId) ? _txtControlJobId.Text.Trim() : prepDlg.ControlJobId;
+                var cjIdSource = string.IsNullOrWhiteSpace(prepDlg.ControlJobId) ? _txtControlJobId.Text.Trim() : prepDlg.ControlJobId.Trim();
+                var cjId = cjIdSource;
                 if (!string.IsNullOrWhiteSpace(cjId))
                 {
-                    var processOrderMgmt = byte.TryParse(prepDlg.ProcessOrderMgmt, out var parsedProcessOrderMgmt)
-                        ? parsedProcessOrderMgmt
-                        : (byte)2;
-                    await SendAsync("L1Normal_S14F9_ControlJobCreate", 14, 9,
-                        Secs.SecsMessageFactory.S14F9ControlJobCreate(cjId, carrierId2, [pjId], processOrderMgmt, slotIds)).ConfigureAwait(true);
+                    _currentNormalControlJobId = cjId;
+                    // Arm CJ start tracking before create/start sequence because some tools emit CEID 93/96 immediately.
+                    TrackExpectedReport("11) Control Job Start Event");
+                    const byte processOrderMgmt = 2;
+                    await SendControlJobCreateWithFallbackAsync(
+                        "L1Normal_S14F9_ControlJobCreate",
+                        cjId,
+                        carrierId2,
+                        [pjId],
+                        processOrderMgmt,
+                        ppid,
+                        slotIds).ConfigureAwait(true);
                 }
 
                 MarkReportPass("10) PPSelect & Start OR Create Process Job & Control Job (E40 & E94)", "S2F41/S16F15/S14F9 sent");
-                TrackExpectedReport("11) Control Job Start Event");
             }, 260);
 
         var jobRow = new FlowLayoutPanel
@@ -784,9 +799,8 @@ public sealed class L1NormalScenarioPage : BaseTestPage
 
                 _txtControlJobId.Text = dlg.ControlJobId;
                 _txtCarrierId.Text = dlg.CarrierId;
-                var processOrderMgmt = byte.TryParse(dlg.ProcessOrderMgmt, out var parsedProcessOrderMgmt)
-                    ? parsedProcessOrderMgmt
-                    : (byte)2;
+                _currentNormalControlJobId = dlg.ControlJobId;
+                const byte processOrderMgmt = 2;
 
                 var processJobs = dlg.GetProcessJobIds()
                     .Select<string, (string ProcessJobId, IEnumerable<string> SlotIds)>(id => (
@@ -806,8 +820,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                 ResetMultiLotWaferSlotProgress(totalSlotCount > 0 ? totalSlotCount : GetMultiLotContentMapSlotIds().Count);
 
                 TrackExpectedReport("8) Control Job CJ1 Start Event");
-                await SendAsync("L1Normal_Multi_S14F9_CreateCJ1", 14, 9,
-                    Secs.SecsMessageFactory.S14F9ControlJobCreate(dlg.ControlJobId, dlg.CarrierId, processJobs, processOrderMgmt)).ConfigureAwait(true);
+                await SendControlJobCreateWithFallbackAsync(
+                    "L1Normal_Multi_S14F9_CreateCJ1",
+                    dlg.ControlJobId,
+                    dlg.CarrierId,
+                    processJobs,
+                    processOrderMgmt).ConfigureAwait(true);
             }, 260);
 
         leftMultiLot.Controls.Add(multiLoadSection, 0, 0);
@@ -924,6 +942,7 @@ public sealed class L1NormalScenarioPage : BaseTestPage
         // Final fallback: allow any S6F11 payload that clearly contains a valid Carrier ID.
         // Some equipment reports CarrierID on CEIDs other than 1000 and without explicit event keywords.
         if (string.IsNullOrWhiteSpace(carrierIdFromEvent) &&
+            !(hasCeid && IsJobLifecycleCeid(ceid)) &&
             TryExtractCarrierId(wrapper.PrimaryMessage, combinedText, out var fallbackCarrierId))
         {
             carrierIdFromEvent = fallbackCarrierId;
@@ -974,6 +993,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                     return;
                 }
 
+                if (!IsReportForCurrentJob(actionByPayloadWithoutCeid, snapshot, out var payloadRejectReason))
+                {
+                    PushS6F11Monitor(snapshot.Raw, $"ignored payload -> {actionByPayloadWithoutCeid}; {payloadRejectReason}");
+                    return;
+                }
+
                 PushS6F11Monitor(snapshot.Raw, $"payload -> {actionByPayloadWithoutCeid}");
                 MarkReportPass(actionByPayloadWithoutCeid, "payload");
                 return;
@@ -984,6 +1009,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                 if (!IsReportActionArmed(actionByKeywordWithoutCeid))
                 {
                     PushS6F11Monitor(snapshot.Raw, $"ignored keyword -> {actionByKeywordWithoutCeid}; step not started");
+                    return;
+                }
+
+                if (!IsReportForCurrentJob(actionByKeywordWithoutCeid, snapshot, out var keywordRejectReason))
+                {
+                    PushS6F11Monitor(snapshot.Raw, $"ignored keyword -> {actionByKeywordWithoutCeid}; {keywordRejectReason}");
                     return;
                 }
 
@@ -1026,6 +1057,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                 return;
             }
 
+            if (!IsReportForCurrentJob(knownAction, snapshot, out var knownRejectReason))
+            {
+                PushS6F11Monitor(snapshot.Raw, $"ignored known {_activeReportScope} CEID={ceid} -> {knownAction}; {knownRejectReason}");
+                return;
+            }
+
             PushS6F11Monitor(snapshot.Raw, $"known {_activeReportScope} CEID={ceid} -> {knownAction}");
             MarkReportPass(knownAction, $"CEID={ceid} known");
             return;
@@ -1044,6 +1081,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                 return;
             }
 
+            if (!IsReportForCurrentJob(mappedAction, snapshot, out var mappedRejectReason))
+            {
+                PushS6F11Monitor(snapshot.Raw, $"ignored mapped {_activeReportScope} CEID={ceid} -> {mappedAction}; {mappedRejectReason}");
+                return;
+            }
+
             PushS6F11Monitor(snapshot.Raw, $"mapped {_activeReportScope} CEID={ceid} -> {mappedAction}");
             MarkReportPass(mappedAction, $"CEID={ceid}");
             return;
@@ -1057,6 +1100,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
                 return;
             }
 
+            if (!IsReportForCurrentJob(actionByPayload, snapshot, out var payloadRejectReason))
+            {
+                PushS6F11Monitor(snapshot.Raw, $"ignored payload -> {actionByPayload}; {payloadRejectReason}");
+                return;
+            }
+
             PushS6F11Monitor(snapshot.Raw, $"payload -> {actionByPayload}");
             MarkReportPass(actionByPayload, "payload");
             return;
@@ -1067,6 +1116,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
             if (!IsReportActionArmed(actionByKeyword))
             {
                 PushS6F11Monitor(snapshot.Raw, $"ignored keyword -> {actionByKeyword}; step not started");
+                return;
+            }
+
+            if (!IsReportForCurrentJob(actionByKeyword, snapshot, out var keywordRejectReason))
+            {
+                PushS6F11Monitor(snapshot.Raw, $"ignored keyword -> {actionByKeyword}; {keywordRejectReason}");
                 return;
             }
 
@@ -1103,6 +1158,77 @@ public sealed class L1NormalScenarioPage : BaseTestPage
         return map.TryGetValue(ceid, out actionText!);
     }
 
+    private bool IsReportForCurrentJob(string actionText, S6F11Snapshot snapshot, out string rejectReason)
+    {
+        rejectReason = string.Empty;
+        var expectedId = GetExpectedJobIdForAction(actionText);
+        if (string.IsNullOrWhiteSpace(expectedId))
+        {
+            return true;
+        }
+
+        if (ContainsToken(snapshot.CombinedText, expectedId))
+        {
+            return true;
+        }
+
+        // Some tools report CEID=96 (Process Job Start) with CJID-only payload.
+        // Accept current CJID for Normal "12) Process Job Start Event" to avoid false negative.
+        if (_activeReportScope == ReportScope.Normal &&
+            snapshot.Ceid == 96 &&
+            string.Equals(actionText, "12) Process Job Start Event", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(_currentNormalControlJobId) &&
+            ContainsToken(snapshot.CombinedText, _currentNormalControlJobId))
+        {
+            return true;
+        }
+
+        rejectReason = $"payload does not contain expected ID '{expectedId}'";
+        return false;
+    }
+
+    private string GetExpectedJobIdForAction(string actionText)
+    {
+        if (_activeReportScope == ReportScope.MultiLot)
+        {
+            if (ContainsActionName(actionText, "Control Job"))
+            {
+                return _currentNormalControlJobId;
+            }
+
+            if (ContainsActionName(actionText, "PJ1"))
+            {
+                return _multiLotPj1Id;
+            }
+
+            if (ContainsActionName(actionText, "PJ2"))
+            {
+                return _multiLotPj2Id;
+            }
+
+            return string.Empty;
+        }
+
+        if (ContainsActionName(actionText, "Control Job"))
+        {
+            return _currentNormalControlJobId;
+        }
+
+        if (ContainsActionName(actionText, "Process Job"))
+        {
+            return _currentNormalProcessJobId;
+        }
+
+        return string.Empty;
+    }
+
+    private static bool ContainsActionName(string actionText, string name)
+        => actionText.Contains(name, StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsToken(string text, string token)
+        => !string.IsNullOrWhiteSpace(text) &&
+            text.Contains(token, StringComparison.OrdinalIgnoreCase);
+
     private bool TryMarkPendingReportForCeid(uint ceid, S6F11Snapshot snapshot)
     {
         if (string.IsNullOrWhiteSpace(PendingReportAction))
@@ -1117,6 +1243,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
         }
 
         var learnedAction = PendingReportAction!;
+        if (!IsReportForCurrentJob(learnedAction, snapshot, out var rejectReason))
+        {
+            PushS6F11Monitor(snapshot.Raw, $"ignored pending {_activeReportScope} CEID={ceid} -> {learnedAction}; {rejectReason}");
+            return true;
+        }
+
         if (!IsMultiLotSequentialAction(learnedAction))
         {
             _reportActionByCeid[(_activeReportScope, ceid)] = learnedAction;
@@ -1279,9 +1411,198 @@ public sealed class L1NormalScenarioPage : BaseTestPage
         return normalActionText;
     }
 
+    private async Task SendControlJobCreateWithFallbackAsync(
+        string operationName,
+        string controlJobId,
+        string carrierId,
+        IEnumerable<string> processJobIds,
+        byte preferredProcessOrderMgmt,
+        string recipeId,
+        IEnumerable<string>? slotIds = null)
+    {
+        _ = preferredProcessOrderMgmt;
+
+        var normalizedProcessJobIds = processJobIds
+            .Select(id => id.Trim())
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var attempts = new (string AttemptName, string AttemptDesc, Secs4Net.Item Payload, bool RequiresStartCommand)[]
+        {
+            (
+                operationName,
+                "E94 standard payload (Equipment/ControlJob, ProcessOrderMgmt=2, StartMethod=True)",
+                Secs.SecsMessageFactory.S14F9ControlJobCreate(
+                    controlJobId,
+                    carrierId,
+                    normalizedProcessJobIds,
+                    processOrderMgmt: 2,
+                    slotIds: null,
+                    startMethod: true),
+                false
+            ),
+            (
+                $"{operationName}_Compat_TEST",
+                "E94 compatibility payload (TEST/CONTROLJOB, ProcessOrderMgmt=3, StartMethod=False, DataPlanTest)",
+                Secs.SecsMessageFactory.S14F9ControlJobCreateTestDomain(
+                    controlJobId,
+                    carrierId,
+                    normalizedProcessJobIds,
+                    processOrderMgmt: 3,
+                    startMethod: false,
+                    dataCollectionPlan: "DataPlanTest"),
+                true
+            )
+        };
+
+        for (var i = 0; i < attempts.Length; i++)
+        {
+            var attempt = attempts[i];
+
+            if (attempt.RequiresStartCommand)
+            {
+                foreach (var processJobId in normalizedProcessJobIds)
+                {
+                    var prepName = $"{attempt.AttemptName}_PreparePJ_{processJobId}";
+                    var prepOk = await SendAllowNakAsync(
+                        prepName,
+                        14,
+                        9,
+                        Secs.SecsMessageFactory.S14F9ProcessJobCreateTestDomain(
+                            processJobId,
+                            recipeId,
+                            carrierId,
+                            slotIds,
+                            processStart: true)).ConfigureAwait(true);
+                    if (!prepOk)
+                    {
+                        AppendResult($"[WARN] Compat TEST fallback: TEST/PROCESSJOB prepare not accepted for {processJobId}; continue with TEST/CONTROLJOB create.");
+                    }
+                }
+            }
+
+            var ok = await SendAllowNakAsync(
+                attempt.AttemptName,
+                14,
+                9,
+                attempt.Payload).ConfigureAwait(true);
+
+            if (ok)
+            {
+                if (i > 0)
+                {
+                    AppendResult($"[INFO] ControlJob create succeeded by fallback profile: {attempt.AttemptDesc}.");
+                }
+
+                if (attempt.RequiresStartCommand)
+                {
+                    AppendResult("[INFO] Compat TEST profile uses StartMethod=False; send S16F27 START to enter measurement flow.");
+                    await SendAsync(
+                        $"{attempt.AttemptName}_S16F27_Start",
+                        16,
+                        27,
+                        Secs.SecsMessageFactory.S16F27ControlJobCommand(controlJobId, 1)).ConfigureAwait(true);
+                }
+
+                return;
+            }
+
+            AppendResult($"[WARN] ControlJob create rejected, next profile: {attempt.AttemptDesc}.");
+        }
+
+        throw new InvalidOperationException($"{operationName} returned NAK/ERROR for all retry combinations.");
+    }
+
+    private async Task SendControlJobCreateWithFallbackAsync(
+        string operationName,
+        string controlJobId,
+        string carrierId,
+        IEnumerable<(string ProcessJobId, IEnumerable<string> SlotIds)> processJobs,
+        byte preferredProcessOrderMgmt)
+    {
+        _ = preferredProcessOrderMgmt;
+
+        var normalizedProcessJobIds = processJobs
+            .Select(job => job.ProcessJobId.Trim())
+            .Where(processJobId => !string.IsNullOrWhiteSpace(processJobId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var controlJobProcessJobs = normalizedProcessJobIds
+            .Select(processJobId => (ProcessJobId: processJobId, SlotIds: Enumerable.Empty<string>()))
+            .ToArray();
+
+        var attempts = new (string AttemptName, string AttemptDesc, Secs4Net.Item Payload, bool RequiresStartCommand)[]
+        {
+            (
+                operationName,
+                "E94 standard payload (Equipment/ControlJob, ProcessOrderMgmt=2, StartMethod=True)",
+                Secs.SecsMessageFactory.S14F9ControlJobCreate(
+                    controlJobId,
+                    carrierId,
+                    controlJobProcessJobs,
+                    processOrderMgmt: 2,
+                    startMethod: true),
+                false
+            ),
+            (
+                $"{operationName}_Compat_TEST",
+                "E94 compatibility payload (TEST/CONTROLJOB, ProcessOrderMgmt=3, StartMethod=False, DataPlanTest)",
+                Secs.SecsMessageFactory.S14F9ControlJobCreateTestDomain(
+                    controlJobId,
+                    carrierId,
+                    normalizedProcessJobIds,
+                    processOrderMgmt: 3,
+                    startMethod: false,
+                    dataCollectionPlan: "DataPlanTest"),
+                true
+            )
+        };
+
+        for (var i = 0; i < attempts.Length; i++)
+        {
+            var attempt = attempts[i];
+            var ok = await SendAllowNakAsync(
+                attempt.AttemptName,
+                14,
+                9,
+                attempt.Payload).ConfigureAwait(true);
+
+            if (ok)
+            {
+                if (i > 0)
+                {
+                    AppendResult($"[INFO] ControlJob create succeeded by fallback profile: {attempt.AttemptDesc}.");
+                }
+
+                if (attempt.RequiresStartCommand)
+                {
+                    AppendResult("[INFO] Compat TEST profile uses StartMethod=False; send S16F27 START to enter measurement flow.");
+                    await SendAsync(
+                        $"{attempt.AttemptName}_S16F27_Start",
+                        16,
+                        27,
+                        Secs.SecsMessageFactory.S16F27ControlJobCommand(controlJobId, 1)).ConfigureAwait(true);
+                }
+
+                return;
+            }
+
+            AppendResult($"[WARN] ControlJob create rejected, next profile: {attempt.AttemptDesc}.");
+        }
+
+        throw new InvalidOperationException($"{operationName} returned NAK/ERROR for all retry combinations.");
+    }
+
     private static bool TryShouldSupplementCarrierId(uint? ceid, uint? rptid, string combinedText)
     {
         if (ceid == 1000)
+        {
+            return false;
+        }
+
+        if (ceid.HasValue && IsJobLifecycleCeid(ceid.Value))
         {
             return false;
         }
@@ -1547,6 +1868,12 @@ public sealed class L1NormalScenarioPage : BaseTestPage
             _ = TryAutoSendProceedWithCarrierAsync();
         }
 
+        if (_activeReportScope == ReportScope.Normal &&
+            string.Equals(actionText, "12) Process Job Start Event", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = TryAutoKickMeasurementAfterProcessStartAsync();
+        }
+
         if (!TryGetReportLamp(actionText, out var lamp))
         {
             return;
@@ -1615,6 +1942,56 @@ public sealed class L1NormalScenarioPage : BaseTestPage
             _txtLoadingExecutionResult.Text = "Auto sent S3F17 failed";
             AppendResult($"[WARN] Auto send S3F17 failed: {ex.Message}");
         }
+    }
+
+    private async Task TryAutoKickMeasurementAfterProcessStartAsync()
+    {
+        if (_normalMeasurementKickSent)
+        {
+            return;
+        }
+
+        var processJobId = _currentNormalProcessJobId.Trim();
+        if (string.IsNullOrWhiteSpace(processJobId))
+        {
+            return;
+        }
+
+        // Some tools stop at CEID=96 without entering wafer events unless PR START is issued once more.
+        await Task.Delay(1500).ConfigureAwait(true);
+
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        if (!IsReportActionArmed("13) Wafer Process Start Event"))
+        {
+            return;
+        }
+
+        if (TryGetReportLamp(ReportScope.Normal, "13) Wafer Process Start Event", out var startLamp) &&
+            startLamp.BackColor == Color.FromArgb(78, 180, 95))
+        {
+            return;
+        }
+
+        _normalMeasurementKickSent = true;
+        AppendResult($"[INFO] Measurement watchdog: no wafer-start event after CEID=96; send S16F5 START for PJ='{processJobId}'.");
+
+        var ok = await SendAllowNakAsync(
+            "L1Normal_S16F5_ProcessJobStart_AfterCEID96",
+            16,
+            5,
+            Secs.SecsMessageFactory.S16F5ProcessJobCommand(processJobId, "START")).ConfigureAwait(true);
+
+        if (!ok)
+        {
+            AppendResult("[WARN] Measurement watchdog S16F5 START was rejected (NAK/ERROR). Keep waiting for S6F11 wafer events.");
+            return;
+        }
+
+        AppendResult("[INFO] Measurement watchdog S16F5 START accepted.");
     }
 
     private static bool TryExtractCeid(string raw, out uint ceid)
@@ -1919,6 +2296,11 @@ public sealed class L1NormalScenarioPage : BaseTestPage
             return false;
         }
 
+        if (Regex.IsMatch(value, @"^(PJ|CJ)[A-Za-z0-9._-]{1,62}$", RegexOptions.IgnoreCase))
+        {
+            return false;
+        }
+
         if (value.Equals("ProceedWithCarrier", StringComparison.OrdinalIgnoreCase) ||
             value.Equals("ContentMap", StringComparison.OrdinalIgnoreCase) ||
             value.Equals("SlotMap", StringComparison.OrdinalIgnoreCase) ||
@@ -1932,6 +2314,11 @@ public sealed class L1NormalScenarioPage : BaseTestPage
         }
 
         return Regex.IsMatch(value, @"^[A-Za-z0-9._-]{3,64}$");
+    }
+
+    private static bool IsJobLifecycleCeid(uint ceid)
+    {
+        return ceid is 41 or 42 or 44 or 46 or 47 or 91 or 93 or 96 or 97 or 100 or 103;
     }
 
     private static void CollectAsciiCandidates(Secs4Net.Item? item, List<string> output)

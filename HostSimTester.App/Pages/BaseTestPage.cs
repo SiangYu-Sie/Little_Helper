@@ -273,6 +273,21 @@ public abstract class BaseTestPage : UserControl
         }
     }
 
+    protected async Task<bool> SendAllowNakAsync(string operationName, byte stream, byte function, Item? payload = null, bool expectReply = true)
+    {
+        var reply = await Connection.SendAsync(operationName, stream, function, payload, expectReply).ConfigureAwait(true);
+        Logger.Info("Operation {operation} done", operationName);
+        AppendResult($"> {operationName} S{stream}F{function}");
+        var interpreted = Secs.SecsReplyInterpreter.Describe(reply);
+        foreach (var line in interpreted)
+        {
+            AppendResult($"< {line}");
+            Logger.Info("Reply detail: {detail}", line);
+        }
+
+        return reply is null || !interpreted.Any(x => x.Contains("NAK/ERROR", StringComparison.OrdinalIgnoreCase));
+    }
+
     protected async Task WaitPrimaryAsync(string operationName, byte stream, byte function, int timeoutSeconds = 30)
     {
         AppendResult($"> Waiting {operationName} S{stream}F{function}, timeout={timeoutSeconds}s");

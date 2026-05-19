@@ -208,7 +208,13 @@ public static class SecsMessageFactory
         return S14F9ControlJobCreate(controlJobId, carrierId, Array.Empty<string>());
     }
 
-    public static Item S14F9ControlJobCreate(string controlJobId, string carrierId, IEnumerable<string>? processJobIds, byte processOrderMgmt = 2, IEnumerable<string>? slotIds = null)
+    public static Item S14F9ControlJobCreate(
+        string controlJobId,
+        string carrierId,
+        IEnumerable<string>? processJobIds,
+        byte processOrderMgmt = 2,
+        IEnumerable<string>? slotIds = null,
+        bool startMethod = true)
     {
         var processJobList = processJobIds is null
             ? []
@@ -231,14 +237,15 @@ public static class SecsMessageFactory
                 L(A("MtrlOutSpec"), L()),
                 L(A("ProcessingCtrlSpec"), L(processJobList)),
                 L(A("ProcessOrderMgmt"), U1([processOrderMgmt])),
-                L(A("StartMethod"), Boolean([true]))));
+                L(A("StartMethod"), Boolean([startMethod]))));
     }
 
     public static Item S14F9ControlJobCreate(
         string controlJobId,
         string carrierId,
         IEnumerable<(string ProcessJobId, IEnumerable<string> SlotIds)> processJobs,
-        byte processOrderMgmt = 2)
+        byte processOrderMgmt = 2,
+        bool startMethod = true)
     {
         var processJobList = processJobs
             .Select(job => (ProcessJobId: job.ProcessJobId.Trim(), SlotIds: job.SlotIds))
@@ -258,7 +265,58 @@ public static class SecsMessageFactory
                 L(A("MtrlOutSpec"), L()),
                 L(A("ProcessingCtrlSpec"), L(processJobList)),
                 L(A("ProcessOrderMgmt"), U1([processOrderMgmt])),
-                L(A("StartMethod"), Boolean([true]))));
+                L(A("StartMethod"), Boolean([startMethod]))));
+    }
+
+    public static Item S14F9ControlJobCreateTestDomain(
+        string controlJobId,
+        string carrierId,
+        IEnumerable<string>? processJobIds,
+        byte processOrderMgmt = 3,
+        bool startMethod = false,
+        string dataCollectionPlan = "DataPlanTest")
+    {
+        var processJobList = processJobIds is null
+            ? []
+            : processJobIds
+                .Select(processJobId => processJobId.Trim())
+                .Where(processJobId => !string.IsNullOrWhiteSpace(processJobId))
+                .Distinct()
+                .Select(processJobId => L(L(A(processJobId))))
+                .ToArray();
+
+        return L(
+            A("TEST"),
+            A("CONTROLJOB"),
+            L(
+                L(A("ObjID"), A(controlJobId)),
+                L(A("PROCESSINGCTRLSPEC"), L(processJobList)),
+                L(A("DATACOLLECTIONPLAN"), A(dataCollectionPlan)),
+                L(A("CARRIERINPUTSPEC"), L(A(carrierId))),
+                L(A("PROCESSORDERMGMT"), B([processOrderMgmt])),
+                L(A("STARTMETHOD"), Boolean([startMethod]))));
+    }
+
+    public static Item S14F9ProcessJobCreateTestDomain(
+        string processJobId,
+        string recipeId,
+        string carrierId,
+        IEnumerable<string>? slotIds,
+        bool processStart = true)
+    {
+        return L(
+            A("TEST"),
+            A("PROCESSJOB"),
+            L(
+                L(A("ObjID"), A(processJobId)),
+                L(A("PRPROCESSSTART"), Boolean([processStart])),
+                L(A("PRRECIPEMETHOD"), B([0x00])),
+                L(A("RECID"), A(recipeId)),
+                L(A("PRMTLNAMELIST"),
+                    L(
+                        L(
+                            A(carrierId),
+                            BuildSlotIdBinaryList(slotIds))))));
     }
 
     public static Item S5F3EnableDisableAlarm(bool enable)
@@ -522,7 +580,7 @@ public static class SecsMessageFactory
         return L(
             A(controlJobId),
             U1([controlJobCommand]),
-            L(A("ACTION"), U1([action])));
+            L());
     }
 
     public static Item S2F41PPSelect(byte loadPortId, string recipeId)
@@ -573,6 +631,24 @@ public static class SecsMessageFactory
             .Select(byte.Parse)
             .Distinct()
             .Select(slotId => U1([slotId]))
+            .ToArray();
+
+        return L(parsedSlotIds);
+    }
+
+    private static Item BuildSlotIdBinaryList(IEnumerable<string>? slotIds)
+    {
+        if (slotIds is null)
+        {
+            return L();
+        }
+
+        var parsedSlotIds = slotIds
+            .Select(slotId => slotId.Trim())
+            .Where(slotId => byte.TryParse(slotId, out _))
+            .Select(byte.Parse)
+            .Distinct()
+            .Select(slotId => B([slotId]))
             .ToArray();
 
         return L(parsedSlotIds);

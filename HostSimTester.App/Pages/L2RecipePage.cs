@@ -242,7 +242,14 @@ public sealed class L2RecipePage : BaseTestPage
         }
 
         var payload = Secs.SecsMessageFactory.S7F23FormattedProcessProgramSend(ppid, template, refreshTime: true);
-        AppendResult($"[INFO] S7F23 uses cached template for PPID={ppid}.");
+        if (template.RawFormattedBody is not null)
+        {
+            AppendResult($"[INFO] S7F23 uses cached RAW_GROUPS template for PPID={ppid}, groups={template.RawFormattedBody.Count}.");
+        }
+        else
+        {
+            AppendResult($"[INFO] S7F23 uses cached legacy template for PPID={ppid}, PPARM={template.Pparms.Count}.");
+        }
 
         await SendWithReplyAsync(
             "L2Recipe_S7F23_FormattedProcessProgramSend_FormattedRecipeBodyDownload",
