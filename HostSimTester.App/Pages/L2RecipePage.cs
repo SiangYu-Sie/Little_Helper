@@ -9,6 +9,10 @@ public sealed class L2RecipePage : BaseTestPage
     private readonly ComboBox _cboMainPpidDel;
     private readonly ComboBox _cboSubPpidDel;
     private readonly TextBox _txtPpidResult;
+    private readonly Dictionary<string, Secs.SecsMessageFactory.FormattedRecipeTemplate> _formattedRecipeCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, byte[]> _unformattedRecipeCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public L2RecipePage(Secs.SecsConnection connection)
         : base("L2 Recipe", Logging.LoggerNames.L2Recipe, connection)
@@ -76,17 +80,13 @@ public sealed class L2RecipePage : BaseTestPage
         s2Body.Controls.Add(mainBar);
 
         AddActionTo(s2Body, "(2.1) Formatted Recipe Body Upload",
-            () => SendAsync("L2Recipe_S7F25_Main_FormattedUpload", 7, 25,
-                Secs.SecsMessageFactory.S7F25FormattedProcessProgramRequest(GetMainPpid())), 280);
+            () => FormattedUploadAndCacheAsync(GetMainPpid()), 280);
         AddActionTo(s2Body, "(2.2) Formatted Recipe Body Download",
-            () => SendAsync("L2Recipe_S7F23_Main_FormattedDownload", 7, 23,
-                Secs.SecsMessageFactory.S7F23FormattedProcessProgramSend(GetMainPpid())), 280);
+            () => FormattedDownloadWithCacheAsync(GetMainPpid()), 280);
         AddActionTo(s2Body, "(3.1) UnFormatted Recipe Body Upload",
-            () => SendAsync("L2Recipe_S7F5_Main_UnformattedUpload", 7, 5,
-                Secs.SecsMessageFactory.S7F5UnformattedProcessProgramRequest(GetMainPpid())), 280);
+            () => UnformattedUploadAndCacheAsync(GetMainPpid()), 280);
         AddActionTo(s2Body, "(3.2) UnFormatted Recipe Body Download",
-            () => SendAsync("L2Recipe_S7F3_Main_UnformattedDownload", 7, 3,
-                Secs.SecsMessageFactory.S7F3UnformattedProcessProgramSend(GetMainPpid())), 280);
+            () => UnformattedDownloadWithCacheAsync(GetMainPpid()), 280);
 
         var subBar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(6, 10, 6, 0) };
         subBar.Controls.Add(new Label { Text = "Sub Recipe PPID :", Width = 124, ForeColor = Theme.ThemeHelper.TextMid, TextAlign = ContentAlignment.MiddleLeft });
@@ -94,17 +94,13 @@ public sealed class L2RecipePage : BaseTestPage
         s2Body.Controls.Add(subBar);
 
         AddActionTo(s2Body, "(4.1) Formatted Recipe Body Upload",
-            () => SendAsync("L2Recipe_S7F25_Sub_FormattedUpload", 7, 25,
-                Secs.SecsMessageFactory.S7F25FormattedProcessProgramRequest(GetSubPpid())), 280);
+            () => FormattedUploadAndCacheAsync(GetSubPpid()), 280);
         AddActionTo(s2Body, "(4.2) Formatted Recipe Body Download",
-            () => SendAsync("L2Recipe_S7F23_Sub_FormattedDownload", 7, 23,
-                Secs.SecsMessageFactory.S7F23FormattedProcessProgramSend(GetSubPpid())), 280);
+            () => FormattedDownloadWithCacheAsync(GetSubPpid()), 280);
         AddActionTo(s2Body, "(5.1) UnFormatted Recipe Body Upload",
-            () => SendAsync("L2Recipe_S7F5_Sub_UnformattedUpload", 7, 5,
-                Secs.SecsMessageFactory.S7F5UnformattedProcessProgramRequest(GetSubPpid())), 280);
+            () => UnformattedUploadAndCacheAsync(GetSubPpid()), 280);
         AddActionTo(s2Body, "(5.2) UnFormatted Recipe Body Download",
-            () => SendAsync("L2Recipe_S7F3_Sub_UnformattedDownload", 7, 3,
-                Secs.SecsMessageFactory.S7F3UnformattedProcessProgramSend(GetSubPpid())), 280);
+            () => UnformattedDownloadWithCacheAsync(GetSubPpid()), 280);
 
         grid.Controls.Add(s2, 1, 0);
 
@@ -189,6 +185,143 @@ public sealed class L2RecipePage : BaseTestPage
             combo.Items.Add(item);
         if (combo.Items.Count > 0)
             combo.Text = combo.Items.Cast<string>().Contains(current) ? current : combo.Items[0]!.ToString()!;
+    }
+
+    private async Task FormattedUploadAndCacheAsync(string ppid)
+    {
+        if (string.IsNullOrWhiteSpace(ppid))
+        {
+            throw new InvalidOperationException("PPID is empty. Please select or input a PPID first.");
+        }
+
+        var reply = await SendWithReplyAsync(
+            "L2Recipe_S7F25_FormattedProcessProgramRequest_FormattedRecipeBodyUpload",
+            7,
+            25,
+            Secs.SecsMessageFactory.S7F25FormattedProcessProgramRequest(ppid)).ConfigureAwait(true);
+
+        if (reply?.SecsItem is null)
+        {
+            AppendResult($"[WARN] No S7F26 body to cache for PPID={ppid}.");
+            return;
+        }
+
+        if (Secs.SecsMessageFactory.TryExtractFormattedRecipeTemplateFromS7F26(reply.SecsItem, out var template, out var reason))
+        {
+            _formattedRecipeCache[ppid] = template;
+            if (template.RawFormattedBody is not null)
+            {
+                AppendResult($"[INFO] Cached S7F26 template for PPID={ppid}, MDLN={template.Model}, SOFTREV={template.SoftRev}, format=RAW_GROUPS({template.RawFormattedBody.Count}).");
+            }
+            else
+            {
+                AppendResult($"[INFO] Cached S7F26 template for PPID={ppid}, MDLN={template.Model}, SOFTREV={template.SoftRev}, CCODE={template.CCode}, PPARM={template.Pparms.Count}.");
+            }
+
+            if (template.RawFormattedBody is null && template.Pparms.Count != 40)
+            {
+                AppendResult($"[WARN] Equipment requires 40 PPARM. Current cache={template.Pparms.Count}, S7F23 send will normalize to 40.");
+            }
+        }
+        else
+        {
+            AppendResult($"[WARN] S7F26 cache skipped for PPID={ppid}: {reason}");
+        }
+    }
+
+    private async Task FormattedDownloadWithCacheAsync(string ppid)
+    {
+        if (string.IsNullOrWhiteSpace(ppid))
+        {
+            throw new InvalidOperationException("PPID is empty. Please select or input a PPID first.");
+        }
+
+        if (!_formattedRecipeCache.TryGetValue(ppid, out var template))
+        {
+            throw new InvalidOperationException($"No cached S7F26 template for PPID={ppid}. Run formatted upload first.");
+        }
+
+        var payload = Secs.SecsMessageFactory.S7F23FormattedProcessProgramSend(ppid, template, refreshTime: true);
+        AppendResult($"[INFO] S7F23 uses cached template for PPID={ppid}.");
+
+        await SendWithReplyAsync(
+            "L2Recipe_S7F23_FormattedProcessProgramSend_FormattedRecipeBodyDownload",
+            7,
+            23,
+            payload).ConfigureAwait(true);
+    }
+
+    private async Task UnformattedUploadAndCacheAsync(string ppid)
+    {
+        if (string.IsNullOrWhiteSpace(ppid))
+        {
+            throw new InvalidOperationException("PPID is empty. Please select or input a PPID first.");
+        }
+
+        var reply = await SendWithReplyAsync(
+            "L2Recipe_S7F5_UnformattedProcessProgramRequest_UnformattedRecipeBodyUpload",
+            7,
+            5,
+            Secs.SecsMessageFactory.S7F5UnformattedProcessProgramRequest(ppid)).ConfigureAwait(true);
+
+        if (reply?.SecsItem is null)
+        {
+            AppendResult($"[WARN] No S7F6 body to cache for PPID={ppid}.");
+            return;
+        }
+
+        if (Secs.SecsMessageFactory.TryExtractUnformattedRecipeBodyFromS7F6(reply.SecsItem, out var body, out var reason))
+        {
+            _unformattedRecipeCache[ppid] = body;
+            AppendResult($"[INFO] Cached S7F6 body for PPID={ppid}, bytes={body.Length}.");
+        }
+        else
+        {
+            AppendResult($"[WARN] S7F6 cache skipped for PPID={ppid}: {reason}");
+        }
+    }
+
+    private async Task UnformattedDownloadWithCacheAsync(string ppid)
+    {
+        if (string.IsNullOrWhiteSpace(ppid))
+        {
+            throw new InvalidOperationException("PPID is empty. Please select or input a PPID first.");
+        }
+
+        if (!_unformattedRecipeCache.TryGetValue(ppid, out var body) || body.Length == 0)
+        {
+            throw new InvalidOperationException($"No cached S7F6 body for PPID={ppid}. Run unformatted upload first.");
+        }
+
+        var payload = Secs.SecsMessageFactory.S7F3UnformattedProcessProgramSend(ppid, body);
+        AppendResult($"[INFO] S7F3 uses cached S7F6 body for PPID={ppid}, bytes={body.Length}.");
+
+        await SendWithReplyAsync(
+            "L2Recipe_S7F3_UnformattedProcessProgramSend_UnformattedRecipeBodyDownload",
+            7,
+            3,
+            payload).ConfigureAwait(true);
+    }
+
+    private async Task<SecsMessage?> SendWithReplyAsync(string operationName, byte stream, byte function, Item? payload = null, bool expectReply = true)
+    {
+        var reply = await Connection.SendAsync(operationName, stream, function, payload, expectReply).ConfigureAwait(true);
+        Logger.Info("Operation {operation} done", operationName);
+        AppendResult($"> {operationName} S{stream}F{function}");
+
+        var interpreted = Secs.SecsReplyInterpreter.Describe(reply);
+        foreach (var line in interpreted)
+        {
+            AppendResult($"< {line}");
+            Logger.Info("Reply detail: {detail}", line);
+        }
+
+        if (reply is not null && interpreted.Any(x => x.Contains("NAK/ERROR", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"{operationName} returned NAK/ERROR.");
+        }
+
+        return reply;
     }
 }
 

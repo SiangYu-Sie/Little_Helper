@@ -288,6 +288,7 @@ public abstract class BaseTestPage : UserControl
     protected void AppendResult(string text)
     {
         _resultBox.AppendText($"{DateTime.Now:HH:mm:ss} {text}{Environment.NewLine}");
+        _resultBox.ScrollToCaret();
     }
 
     private void SetTestStatus(string text, Color color)
@@ -326,16 +327,16 @@ public abstract class BaseTestPage : UserControl
 
         var width = _pageSplit.ClientSize.Width;
         var minPanel1 = _pageSplit.Panel1MinSize;
-        const int desiredPanel2MinSize = 320;
+        const int minPanel2Width = 280;
 
-        if (width <= minPanel1)
+        if (width <= minPanel1 + minPanel2Width)
         {
             return;
         }
 
-        var effectivePanel2MinSize = Math.Min(desiredPanel2MinSize, width - minPanel1);
-        var maxDistance = width - effectivePanel2MinSize;
-        var targetDistance = Math.Clamp(980, minPanel1, maxDistance);
+        // 左側佔 70%，右側 LOG 佔 30%，但最少 280px
+        var targetDistance = Math.Max(minPanel1, width - Math.Max(minPanel2Width, (int)(width * 0.30)));
+        targetDistance = Math.Min(targetDistance, width - minPanel2Width);
         if (_pageSplit.SplitterDistance != targetDistance)
         {
             _pageSplit.SplitterDistance = targetDistance;

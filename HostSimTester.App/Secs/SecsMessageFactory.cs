@@ -5,6 +5,15 @@ namespace HostSimTester.App.Secs;
 
 public static class SecsMessageFactory
 {
+    private const int FormattedRecipeRequiredPparmCount = 40;
+
+    public sealed record FormattedRecipeTemplate(
+        string Model,
+        string SoftRev,
+        string CCode,
+        IReadOnlyList<Item> Pparms,
+        Item? RawFormattedBody = null);
+
     private static readonly byte[] DefaultRecipeBody =
     [
         0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x01,
@@ -279,14 +288,132 @@ public static class SecsMessageFactory
 
     public static Item S7F23FormattedProcessProgramSend(string ppid)
     {
+        var fallbackPparms = Enumerable.Range(1, FormattedRecipeRequiredPparmCount)
+            .Select(i => L(U2([(ushort)i]), L(A("0"))))
+            .ToArray();
+
+        var fallback = new FormattedRecipeTemplate(
+            Model: "HostSimTester",
+            SoftRev: "1.0.0",
+            CCode: "100",
+            Pparms: fallbackPparms);
+
+        return S7F23FormattedProcessProgramSend(ppid, fallback, refreshTime: false);
+    }
+
+    public static Item S7F23FormattedProcessProgramSend(string ppid, FormattedRecipeTemplate template, bool refreshTime = false)
+    {
+        if (template.RawFormattedBody is not null)
+        {
+            return L(
+                A(ppid),
+                A(template.Model),
+                A(template.SoftRev),
+                CloneItem(template.RawFormattedBody));
+        }
+
+        var pparms = NormalizeFormattedPparms(template.Pparms);
+        if (refreshTime)
+        {
+            RefreshTrailingAsciiDateTime(pparms);
+        }
+
         return L(
             A(ppid),
-            A("HostSimTester"),
-            A("1.0.0"),
+            A(template.Model),
+            A(template.SoftRev),
             L(
                 L(
-                    U2([12]),
-                    L(A("0")))));
+                    BuildCcodeItem(template.CCode),
+                    L(pparms))));
+    }
+
+    private static Item BuildCcodeItem(string ccode)
+    {
+        var normalized = ccode.Trim();
+        return ushort.TryParse(normalized, out var u2)
+            ? U2([u2])
+            : A(normalized);
+    }
+
+    public static bool TryExtractFormattedRecipeTemplateFromS7F26(Item? s7f26Body, out FormattedRecipeTemplate template, out string reason)
+    {
+        template = default!;
+        reason = string.Empty;
+
+        if (s7f26Body is null || s7f26Body.Format != SecsFormat.List || s7f26Body.Count < 4)
+        {
+            reason = "S7F26 root format mismatch.";
+            return false;
+        }
+
+        if (!TryGetScalarString(s7f26Body[1], out var model) || string.IsNullOrWhiteSpace(model))
+        {
+            reason = "S7F26 MDLN missing.";
+            return false;
+        }
+
+        if (!TryGetScalarString(s7f26Body[2], out var softRev) || string.IsNullOrWhiteSpace(softRev))
+        {
+            reason = "S7F26 SOFTREV missing.";
+            return false;
+        }
+
+        var formattedBody = s7f26Body[3];
+        if (formattedBody.Format != SecsFormat.List || formattedBody.Count == 0)
+        {
+            reason = "S7F26 formatted body missing.";
+            return false;
+        }
+
+        var candidates = new List<(string CCode, Item[] Pparms)>();
+        for (var i = 0; i < formattedBody.Count; i++)
+        {
+            var ccodeGroup = formattedBody[i];
+            if (ccodeGroup.Format != SecsFormat.List || ccodeGroup.Count < 2)
+            {
+                continue;
+            }
+
+            if (!TryGetScalarString(ccodeGroup[0], out var ccode) || string.IsNullOrWhiteSpace(ccode))
+            {
+                continue;
+            }
+
+            var pparmList = ccodeGroup[1];
+            if (!IsLegacyPparmList(pparmList))
+            {
+                continue;
+            }
+
+            var pparms = new Item[pparmList.Count];
+            for (var p = 0; p < pparmList.Count; p++)
+            {
+                pparms[p] = CloneItem(pparmList[p]);
+            }
+
+            candidates.Add((ccode.Trim(), pparms));
+        }
+
+        if (candidates.Count == 0)
+        {
+            template = new FormattedRecipeTemplate(
+                model.Trim(),
+                softRev.Trim(),
+                "RAW",
+                Array.Empty<Item>(),
+                CloneItem(formattedBody));
+            return true;
+        }
+
+        var selected = candidates.FirstOrDefault(x => string.Equals(x.CCode, "100", StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(selected.CCode))
+        {
+            selected = candidates[0];
+        }
+
+        template = new FormattedRecipeTemplate(model.Trim(), softRev.Trim(), selected.CCode, selected.Pparms);
+        return true;
     }
 
     public static Item S7F23UnformattedProcessProgramSend(string ppid)
@@ -297,6 +424,39 @@ public static class SecsMessageFactory
     public static Item S7F3UnformattedProcessProgramSend(string ppid)
     {
         return L(A(ppid), B(DefaultRecipeBody));
+    }
+
+    public static Item S7F3UnformattedProcessProgramSend(string ppid, byte[] recipeBody)
+    {
+        return L(A(ppid), B(recipeBody));
+    }
+
+    public static bool TryExtractUnformattedRecipeBodyFromS7F6(Item? s7f6Body, out byte[] recipeBody, out string reason)
+    {
+        recipeBody = Array.Empty<byte>();
+        reason = string.Empty;
+
+        if (s7f6Body is null || s7f6Body.Format != SecsFormat.List || s7f6Body.Count < 2)
+        {
+            reason = "S7F6 root format mismatch.";
+            return false;
+        }
+
+        var bodyItem = s7f6Body[1];
+        if (bodyItem.Format != SecsFormat.Binary)
+        {
+            reason = "S7F6 body is not binary.";
+            return false;
+        }
+
+        recipeBody = bodyItem.GetMemory<byte>().ToArray();
+        if (recipeBody.Length == 0)
+        {
+            reason = "S7F6 body is empty.";
+            return false;
+        }
+
+        return true;
     }
 
     public static Item S7F17DeleteProcessProgramSend(string ppid)
@@ -464,5 +624,144 @@ public static class SecsMessageFactory
         return ids.Length == 0
             ? L()
             : L(ids.Select(id => U4([id])));
+    }
+
+    private static bool TryGetScalarString(Item item, out string value)
+    {
+        try
+        {
+            value = item.Format switch
+            {
+                SecsFormat.ASCII => item.GetString(),
+                SecsFormat.U1 => item.GetMemory<byte>().Span[0].ToString(),
+                SecsFormat.U2 => item.GetMemory<ushort>().Span[0].ToString(),
+                SecsFormat.U4 => item.GetMemory<uint>().Span[0].ToString(),
+                SecsFormat.U8 => item.GetMemory<ulong>().Span[0].ToString(),
+                SecsFormat.I1 => item.GetMemory<sbyte>().Span[0].ToString(),
+                SecsFormat.I2 => item.GetMemory<short>().Span[0].ToString(),
+                SecsFormat.I4 => item.GetMemory<int>().Span[0].ToString(),
+                SecsFormat.I8 => item.GetMemory<long>().Span[0].ToString(),
+                _ => string.Empty
+            };
+
+            return !string.IsNullOrEmpty(value);
+        }
+        catch
+        {
+            value = string.Empty;
+            return false;
+        }
+    }
+
+    private static void RefreshTrailingAsciiDateTime(Item[] pparms)
+    {
+        var now = DateTime.Now.ToString("yyyyMMddHHmmss");
+
+        for (var i = pparms.Length - 1; i >= 0; i--)
+        {
+            var pparm = pparms[i];
+            if (pparm.Format != SecsFormat.List || pparm.Count < 2)
+            {
+                continue;
+            }
+
+            var values = pparm[1];
+            if (values.Format != SecsFormat.List || values.Count == 0)
+            {
+                continue;
+            }
+
+            var last = values[values.Count - 1];
+            if (last.Format != SecsFormat.ASCII)
+            {
+                continue;
+            }
+
+            if (!DateTime.TryParse(last.GetString(), out _))
+            {
+                continue;
+            }
+
+            var codeItem = pparm[0];
+            var newValues = new Item[values.Count];
+            for (var v = 0; v < values.Count - 1; v++)
+            {
+                newValues[v] = values[v];
+            }
+            newValues[^1] = A(now);
+
+            pparms[i] = L(codeItem, L(newValues));
+            return;
+        }
+    }
+
+    private static Item[] NormalizeFormattedPparms(IReadOnlyList<Item> source)
+    {
+        var normalized = source
+            .Take(FormattedRecipeRequiredPparmCount)
+            .Select(CloneItem)
+            .ToList();
+
+        var seed = 1000;
+        while (normalized.Count < FormattedRecipeRequiredPparmCount)
+        {
+            normalized.Add(L(U2([(ushort)seed]), L(A("0"))));
+            seed++;
+        }
+
+        return normalized.ToArray();
+    }
+
+    private static bool IsLegacyPparmList(Item pparmList)
+    {
+        if (pparmList.Format != SecsFormat.List)
+        {
+            return false;
+        }
+
+        if (pparmList.Count == 0)
+        {
+            return true;
+        }
+
+        for (var i = 0; i < pparmList.Count; i++)
+        {
+            var pparm = pparmList[i];
+            if (pparm.Format != SecsFormat.List || pparm.Count < 2)
+            {
+                return false;
+            }
+
+            var code = pparm[0];
+            var values = pparm[1];
+            if ((code.Format is not (SecsFormat.U2 or SecsFormat.U4 or SecsFormat.ASCII)) || values.Format != SecsFormat.List)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static Item CloneItem(Item source)
+    {
+        return source.Format switch
+        {
+            SecsFormat.List => L(Enumerable.Range(0, source.Count).Select(i => CloneItem(source[i]))),
+            SecsFormat.ASCII => A(source.GetString()),
+            SecsFormat.Binary => B(source.GetMemory<byte>().ToArray()),
+            SecsFormat.Boolean => Boolean(source.GetMemory<bool>().ToArray()),
+            SecsFormat.U1 => U1(source.GetMemory<byte>().ToArray()),
+            SecsFormat.U2 => U2(source.GetMemory<ushort>().ToArray()),
+            SecsFormat.U4 => U4(source.GetMemory<uint>().ToArray()),
+            SecsFormat.U8 => U8(source.GetMemory<ulong>().ToArray()),
+            SecsFormat.I1 => I1(source.GetMemory<sbyte>().ToArray()),
+            SecsFormat.I2 => I2(source.GetMemory<short>().ToArray()),
+            SecsFormat.I4 => I4(source.GetMemory<int>().ToArray()),
+            SecsFormat.I8 => I8(source.GetMemory<long>().ToArray()),
+            SecsFormat.F4 => F4(source.GetMemory<float>().ToArray()),
+            SecsFormat.F8 => F8(source.GetMemory<double>().ToArray()),
+            _ => throw new NotSupportedException($"Unsupported SecsFormat for clone: {source.Format}")
+        };
     }
 }

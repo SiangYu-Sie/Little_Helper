@@ -333,6 +333,23 @@ public sealed class SecsConnection : IAsyncDisposable
             return;
         }
 
+        if (primary.PrimaryMessage.S == 7 && primary.PrimaryMessage.F == 27)
+        {
+            var ack = new SecsMessage(7, 28, false)
+            {
+                Name = "ProcessProgramVerificationAck",
+                SecsItem = Item.L()
+            };
+
+            var replied = await primary.TryReplyAsync(ack, cancellationToken).ConfigureAwait(false);
+            if (replied)
+            {
+                _uiLogger.Info("Auto reply S7F28 ACK for S7F27");
+            }
+
+            return;
+        }
+
         if (_templateRegistry.TryGetBySxFy(primary.PrimaryMessage.S, primary.PrimaryMessage.F, out var candidates))
         {
             var source = candidates.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.AutoReply));

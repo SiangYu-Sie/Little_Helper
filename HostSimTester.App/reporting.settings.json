@@ -1,0 +1,7 @@
+{
+  "Enabled": true,
+  "ApiUrl": "http://127.0.0.1:5088/api/issue-reports",
+  "ApiKey": "dev-local-api-key",
+  "TargetEmail": "siangyu.sie@tlhome.com.tw",
+  "TimeoutSeconds": 20
+}

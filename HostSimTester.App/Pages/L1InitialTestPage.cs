@@ -15,12 +15,27 @@ public sealed class L1InitialTestPage : BaseTestPage
     private readonly TextBox _txtLoadPortCount;
     private readonly TextBox _txtPortIds;
     private readonly Dictionary<uint, string> _equipmentActionByCeid = new();
+    private readonly Dictionary<string, Panel> _defineEventStepLamps = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ListBox _lstRejectCeids;
+    private readonly ListBox _lstRejectDvids;
     private string? _pendingEquipmentAction;
     private DateTime _pendingEquipmentActionAt;
+
+    private const string StepVerifyCeid = "1) Verify Each CEID";
+    private const string StepVerifyDvid = "2) Verify Each DVID";
+    private const string StepDisableAllEvent = "3) Disable All Event";
+    private const string StepUnlinkEventReport = "4) Unlink Event Report";
+    private const string StepDeleteAllEventReport = "5) Delete All Event Report";
+    private const string StepDefineEventReport = "6) Define Event Report";
+    private const string StepLinkEventReport = "7) Link Event Report";
+    private const string StepEnableEventReport = "8) Enable Event Report";
 
     public L1InitialTestPage(Secs.SecsConnection connection)
         : base("L1 Initial Test", Logging.LoggerNames.L1Initial, connection)
     {
+        _lstRejectCeids = CreateRejectList();
+        _lstRejectDvids = CreateRejectList();
+
         Connection.PrimaryMessageReceived += OnPrimaryMessageReceived;
         Disposed += (_, _) => Connection.PrimaryMessageReceived -= OnPrimaryMessageReceived;
 
@@ -189,7 +204,8 @@ public sealed class L1InitialTestPage : BaseTestPage
                 Logger.Info($"Open template file: {path}");
                 return Task.CompletedTask;
             },
-            230);
+            230,
+            showLamp: false);
 
         var txtWrapPanel = new Panel { Width = 410, Height = 28, Margin = new Padding(34, 0, 6, 0) };
         txtWrapPanel.Controls.Add(_txtTemplatePath);
@@ -210,110 +226,71 @@ public sealed class L1InitialTestPage : BaseTestPage
         AddActionTo(hostControlBody, "Host Set Remote (S2F41)", () => SendHostModeAndTrackAsync("L1Initial_S2F41_SetRemote", 2, 41, Secs.SecsMessageFactory.S2F41HostCommand("GO-REMOTE"), EquipRemoteAction), 250);
 
         var defineEventBody = CreateSectionBody(defineEventSection);
-        defineEventBody.Controls.Add(new Label { Text = "Run all 8 steps in one click with sample CEID/RPTID/DVID", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
-        AddActionTo(defineEventBody, "Run Define Event Report Test", async () =>
+        AddActionTo(defineEventBody, "Run Define Event Report Test", RunDefineEventReportAsync, 240, showLamp: false);
+
+        var defineLayout = new TableLayoutPanel
         {
-            // Step order aligned with reference TSMC Tester:
-            // 1) DisableAllEvent  2) UnlinkEventReport  3) DeleteAllEventReport
-            // 4) VerifyEachCEID (one S2F37 per CEID from Excel)
-            // 5) VerifyEachDVID (one S2F37 per DVID from Excel)
-            // 6) DefineEventReport  7) LinkEventReport  8) EnableEventReport
-            await SendAsync("L1Initial_Step1_DisableAllEvent_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(false)).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step2_UnlinkEventReport_S2F35", 2, 35, Secs.SecsMessageFactory.S2F35UnlinkAllReports()).ConfigureAwait(true);
-            await SendAsync("L1Initial_Step3_DeleteAllEventReport_S2F33", 2, 33, Secs.SecsMessageFactory.S2F33DeleteAllReports()).ConfigureAwait(true);
+            Width = 500,
+            Height = 410,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(6, 10, 6, 0),
+            Padding = new Padding(0),
+            BackColor = Theme.ThemeHelper.IceSurface
+        };
+        defineLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        defineLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
 
-            var ceids = AppSession.L1InitialCeids;
-            if (ceids.Count == 0)
-            {
-                AppendResult("[INFO] Step4 VerifyEachCEID: no CEIDs from Excel, sending one fallback S2F37.");
-                await SendAsync("L1Initial_Step4_VerifyCEID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-            }
-            else
-            {
-                AppendResult($"[INFO] Step4 VerifyEachCEID: {ceids.Count} CEIDs from Excel.");
-                foreach (var ceid in ceids)
-                {
-                    await SendAsync($"L1Initial_Step4_VerifyCEID_{ceid}_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-                }
-            }
+        var stepPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Theme.ThemeHelper.IceSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 2, 0, 0)
+        };
 
-            var dvids = AppSession.L1InitialDvids;
-            if (dvids.Count == 0)
-            {
-                AppendResult("[INFO] Step5 VerifyEachDVID: no DVIDs from Excel, sending one fallback S2F37.");
-                await SendAsync("L1Initial_Step5_VerifyDVID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-            }
-            else
-            {
-                AppendResult($"[INFO] Step5 VerifyEachDVID: {dvids.Count} DVIDs from Excel.");
-                foreach (var dvid in dvids)
-                {
-                    await SendAsync($"L1Initial_Step5_VerifyDVID_{dvid}_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-                }
-            }
+        AddDefineEventStepRow(stepPanel, StepVerifyCeid);
+        AddDefineEventStepRow(stepPanel, StepVerifyDvid);
+        AddDefineEventStepRow(stepPanel, StepDisableAllEvent);
+        AddDefineEventStepRow(stepPanel, StepUnlinkEventReport);
+        AddDefineEventStepRow(stepPanel, StepDeleteAllEventReport);
+        AddDefineEventStepRow(stepPanel, StepDefineEventReport);
+        AddDefineEventStepRow(stepPanel, StepLinkEventReport);
+        AddDefineEventStepRow(stepPanel, StepEnableEventReport);
 
-            var rptids = AppSession.L1InitialRptids.Count > 0
-                ? AppSession.L1InitialRptids.Where(x => x <= ushort.MaxValue).Distinct().ToArray()
-                : [1u];
-            var defineDvids = AppSession.L1InitialDvids.Count > 0
-                ? AppSession.L1InitialDvids.Distinct().ToArray()
-                : [101001u, 101002u];
+        var rejectPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Theme.ThemeHelper.IceSurface,
+            Margin = new Padding(8, 0, 0, 0),
+            Padding = new Padding(0)
+        };
 
-            AppendResult($"[INFO] Step6 DefineEventReport: RPTIDs={string.Join(",", rptids)}, DVIDs={defineDvids.Length}");
-            foreach (var rptid in rptids)
-            {
-                await SendAsync($"L1Initial_Step6_DefineEventReport_RPTID_{rptid}_S2F33", 2, 33,
-                    Secs.SecsMessageFactory.S2F33DefineReport(rptid, defineDvids)).ConfigureAwait(true);
-            }
+        rejectPanel.Controls.Add(new Label
+        {
+            Text = "Reject CEIDs by Equipment:",
+            Width = 170,
+            ForeColor = Theme.ThemeHelper.TextMid,
+            Margin = new Padding(0, 2, 0, 6)
+        });
+        rejectPanel.Controls.Add(_lstRejectCeids);
 
-            var linkCeids = AppSession.L1InitialCeids.Count > 0
-                ? AppSession.L1InitialCeids.Distinct().ToArray()
-                : [1001u];
-            AppendResult($"[INFO] Step7 LinkEventReport: CEIDs={linkCeids.Length}, RPTIDs={rptids.Length}");
-            foreach (var ceid in linkCeids)
-            {
-                foreach (var rptid in rptids)
-                {
-                    await SendAsync($"L1Initial_Step7_LinkEventReport_CEID_{ceid}_RPTID_{rptid}_S2F35", 2, 35,
-                        Secs.SecsMessageFactory.S2F35LinkEventReport(ceid, rptid)).ConfigureAwait(true);
-                }
-            }
+        rejectPanel.Controls.Add(new Label
+        {
+            Text = "Reject DVIDs by Equipment:",
+            Width = 170,
+            ForeColor = Theme.ThemeHelper.TextMid,
+            Margin = new Padding(0, 12, 0, 6)
+        });
+        rejectPanel.Controls.Add(_lstRejectDvids);
 
-            // Diagnostic summary for quick comparison with reference tester logs.
-            var ceidPreview = string.Join(",", linkCeids.Take(20)) + (linkCeids.Length > 20 ? ",..." : string.Empty);
-            var rptidPreview = string.Join(",", rptids.Take(20)) + (rptids.Length > 20 ? ",..." : string.Empty);
-            var dvidPreview = string.Join(",", defineDvids.Take(30)) + (defineDvids.Length > 30 ? ",..." : string.Empty);
-            AppendResult($"[DEBUG] DefineEvent summary: CEIDs({linkCeids.Length})=[{ceidPreview}] RPTIDs({rptids.Length})=[{rptidPreview}] DVIDs({defineDvids.Length})=[{dvidPreview}]");
-            Logger.Info("DefineEvent summary: CEIDs({ceidCount})=[{ceids}] RPTIDs({rptCount})=[{rptids}] DVIDs({dvidCount})=[{dvids}]",
-                linkCeids.Length,
-                ceidPreview,
-                rptids.Length,
-                rptidPreview,
-                defineDvids.Length,
-                dvidPreview);
-
-            // Carrier-related DVIDs should come from Excel template mapping.
-            // Typical E87 set in your template: 2000(CarrierID), 443(CarrierIDStatus), 444(CarrierAccessingStatus), 446(ContentMap).
-            var keyCarrierDvids = defineDvids.Where(d => d is 2000u or 443u or 444u or 446u).Distinct().ToArray();
-            if (keyCarrierDvids.Length == 0)
-            {
-                AppendResult("[WARN] DefineEvent DVID list does not include 2000/443/444/446. Carrier-related fields may not be reported in S6F11.");
-                Logger.Warn("DefineEvent DVID list does not include 2000/443/444/446. Carrier-related fields may not be reported in S6F11.");
-            }
-            else
-            {
-                AppendResult($"[INFO] DefineEvent includes carrier-related DVIDs: {string.Join(",", keyCarrierDvids)}");
-                Logger.Info("DefineEvent includes carrier-related DVIDs: {dvids}", string.Join(",", keyCarrierDvids));
-            }
-
-            await SendAsync("L1Initial_Step8_EnableEventReport_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
-            AppSession.MarkL1InitialDefineEventCompleted();
-            AppendResult("[INFO] Define Event Report Test completed (8 steps).");
-            if (AppSession.IsL1InitialCompleted)
-            {
-                AppendResult("[INFO] L1 Initial completed. You can continue to L1 Normal/L2 tabs.");
-            }
-        }, 280);
+        defineLayout.Controls.Add(stepPanel, 0, 0);
+        defineLayout.Controls.Add(rejectPanel, 1, 0);
+        defineEventBody.Controls.Add(defineLayout);
 
         var accessModeBody = CreateSectionBody(accessModeSection);
         accessModeBody.Controls.Add(new Label { Text = "Set load port count and port IDs (comma-separated)", Width = 420, ForeColor = Theme.ThemeHelper.TextMid, Margin = new Padding(6, 2, 6, 0) });
@@ -465,6 +442,202 @@ public sealed class L1InitialTestPage : BaseTestPage
         }
 
         return result.ToArray();
+    }
+
+    private async Task RunDefineEventReportAsync()
+    {
+        ResetDefineEventDisplay();
+
+        var ceids = AppSession.L1InitialCeids;
+        if (ceids.Count == 0)
+        {
+            AppendResult("[INFO] Step1 VerifyEachCEID: no CEIDs from Excel, sending one fallback S2F37.");
+            await SendAsync("L1Initial_Step1_VerifyCEID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+        }
+        else
+        {
+            AppendResult($"[INFO] Step1 VerifyEachCEID: {ceids.Count} CEIDs from Excel.");
+            foreach (var ceid in ceids)
+            {
+                try
+                {
+                    await SendAsync($"L1Initial_Step1_VerifyCEID_{ceid}_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    _lstRejectCeids.Items.Add(ceid.ToString());
+                    AppendResult($"[WARN] CEID {ceid} rejected: {ex.Message}");
+                }
+            }
+        }
+        SetDefineEventStepLamp(StepVerifyCeid, _lstRejectCeids.Items.Count == 0);
+
+        var dvids = AppSession.L1InitialDvids;
+        if (dvids.Count == 0)
+        {
+            AppendResult("[INFO] Step2 VerifyEachDVID: no DVIDs from Excel, sending one fallback S2F37.");
+            await SendAsync("L1Initial_Step2_VerifyDVID_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+        }
+        else
+        {
+            AppendResult($"[INFO] Step2 VerifyEachDVID: {dvids.Count} DVIDs from Excel.");
+            foreach (var dvid in dvids)
+            {
+                try
+                {
+                    await SendAsync($"L1Initial_Step2_VerifyDVID_{dvid}_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    _lstRejectDvids.Items.Add(dvid.ToString());
+                    AppendResult($"[WARN] DVID {dvid} rejected: {ex.Message}");
+                }
+            }
+        }
+        SetDefineEventStepLamp(StepVerifyDvid, _lstRejectDvids.Items.Count == 0);
+
+        await SendAsync("L1Initial_Step3_DisableAllEvent_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(false)).ConfigureAwait(true);
+        SetDefineEventStepLamp(StepDisableAllEvent, true);
+
+        await SendAsync("L1Initial_Step4_UnlinkEventReport_S2F35", 2, 35, Secs.SecsMessageFactory.S2F35UnlinkAllReports()).ConfigureAwait(true);
+        SetDefineEventStepLamp(StepUnlinkEventReport, true);
+
+        await SendAsync("L1Initial_Step5_DeleteAllEventReport_S2F33", 2, 33, Secs.SecsMessageFactory.S2F33DeleteAllReports()).ConfigureAwait(true);
+        SetDefineEventStepLamp(StepDeleteAllEventReport, true);
+
+        var rptids = AppSession.L1InitialRptids.Count > 0
+            ? AppSession.L1InitialRptids.Where(x => x <= ushort.MaxValue).Distinct().ToArray()
+            : [1u];
+        var defineDvids = AppSession.L1InitialDvids.Count > 0
+            ? AppSession.L1InitialDvids.Distinct().ToArray()
+            : [101001u, 101002u];
+
+        AppendResult($"[INFO] Step6 DefineEventReport: RPTIDs={string.Join(",", rptids)}, DVIDs={defineDvids.Length}");
+        foreach (var rptid in rptids)
+        {
+            await SendAsync($"L1Initial_Step6_DefineEventReport_RPTID_{rptid}_S2F33", 2, 33,
+                Secs.SecsMessageFactory.S2F33DefineReport(rptid, defineDvids)).ConfigureAwait(true);
+        }
+        SetDefineEventStepLamp(StepDefineEventReport, true);
+
+        var linkCeids = AppSession.L1InitialCeids.Count > 0
+            ? AppSession.L1InitialCeids.Distinct().ToArray()
+            : [1001u];
+        AppendResult($"[INFO] Step7 LinkEventReport: CEIDs={linkCeids.Length}, RPTIDs={rptids.Length}");
+        foreach (var ceid in linkCeids)
+        {
+            foreach (var rptid in rptids)
+            {
+                await SendAsync($"L1Initial_Step7_LinkEventReport_CEID_{ceid}_RPTID_{rptid}_S2F35", 2, 35,
+                    Secs.SecsMessageFactory.S2F35LinkEventReport(ceid, rptid)).ConfigureAwait(true);
+            }
+        }
+        SetDefineEventStepLamp(StepLinkEventReport, true);
+
+        var ceidPreview = string.Join(",", linkCeids.Take(20)) + (linkCeids.Length > 20 ? ",..." : string.Empty);
+        var rptidPreview = string.Join(",", rptids.Take(20)) + (rptids.Length > 20 ? ",..." : string.Empty);
+        var dvidPreview = string.Join(",", defineDvids.Take(30)) + (defineDvids.Length > 30 ? ",..." : string.Empty);
+        AppendResult($"[DEBUG] DefineEvent summary: CEIDs({linkCeids.Length})=[{ceidPreview}] RPTIDs({rptids.Length})=[{rptidPreview}] DVIDs({defineDvids.Length})=[{dvidPreview}]");
+        Logger.Info("DefineEvent summary: CEIDs({ceidCount})=[{ceids}] RPTIDs({rptCount})=[{rptids}] DVIDs({dvidCount})=[{dvids}]",
+            linkCeids.Length,
+            ceidPreview,
+            rptids.Length,
+            rptidPreview,
+            defineDvids.Length,
+            dvidPreview);
+
+        var keyCarrierDvids = defineDvids.Where(d => d is 2000u or 443u or 444u or 446u).Distinct().ToArray();
+        if (keyCarrierDvids.Length == 0)
+        {
+            AppendResult("[WARN] DefineEvent DVID list does not include 2000/443/444/446. Carrier-related fields may not be reported in S6F11.");
+            Logger.Warn("DefineEvent DVID list does not include 2000/443/444/446. Carrier-related fields may not be reported in S6F11.");
+        }
+        else
+        {
+            AppendResult($"[INFO] DefineEvent includes carrier-related DVIDs: {string.Join(",", keyCarrierDvids)}");
+            Logger.Info("DefineEvent includes carrier-related DVIDs: {dvids}", string.Join(",", keyCarrierDvids));
+        }
+
+        await SendAsync("L1Initial_Step8_EnableEventReport_S2F37", 2, 37, Secs.SecsMessageFactory.S2F37EnableDisableEventReport(true)).ConfigureAwait(true);
+        SetDefineEventStepLamp(StepEnableEventReport, true);
+
+        AppSession.MarkL1InitialDefineEventCompleted();
+        AppendResult("[INFO] Define Event Report Test completed (8 steps).");
+        if (AppSession.IsL1InitialCompleted)
+        {
+            AppendResult("[INFO] L1 Initial completed. You can continue to L1 Normal/L2 tabs.");
+        }
+    }
+
+    private static ListBox CreateRejectList()
+    {
+        return new ListBox
+        {
+            Width = 165,
+            Height = 140,
+            BackColor = Color.FromArgb(130, 200, 215),
+            ForeColor = Theme.ThemeHelper.TextMid,
+            BorderStyle = BorderStyle.FixedSingle,
+            IntegralHeight = false,
+            HorizontalScrollbar = true,
+            Margin = new Padding(0)
+        };
+    }
+
+    private void AddDefineEventStepRow(Control host, string text)
+    {
+        var row = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
+            Margin = new Padding(0, 4, 0, 4),
+            Padding = new Padding(0),
+            BackColor = Theme.ThemeHelper.IceSurface
+        };
+
+        var lamp = new Panel
+        {
+            Width = 16,
+            Height = 16,
+            Margin = new Padding(0, 3, 10, 0),
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = Color.FromArgb(160, 170, 180)
+        };
+        _defineEventStepLamps[text] = lamp;
+
+        row.Controls.Add(lamp);
+        row.Controls.Add(new Label
+        {
+            Text = text,
+            Width = 220,
+            Height = 24,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Theme.ThemeHelper.TextMid,
+            Margin = new Padding(0)
+        });
+        host.Controls.Add(row);
+    }
+
+    private void ResetDefineEventDisplay()
+    {
+        foreach (var lamp in _defineEventStepLamps.Values)
+        {
+            lamp.BackColor = Color.FromArgb(160, 170, 180);
+        }
+
+        _lstRejectCeids.Items.Clear();
+        _lstRejectDvids.Items.Clear();
+    }
+
+    private void SetDefineEventStepLamp(string step, bool pass)
+    {
+        if (_defineEventStepLamps.TryGetValue(step, out var lamp))
+        {
+            lamp.BackColor = pass
+                ? Color.FromArgb(78, 180, 95)
+                : Theme.ThemeHelper.DangerRed;
+        }
     }
 }
 
